@@ -37,7 +37,7 @@ pub trait ObservabilitySink: Send + Sync {
 
 Decision rationale: [Options 013 (observability sink)](../05-options/013-observability-sink.md), [Options 014 (eBPF integration)](../05-options/014-ebpf-integration.md).
 
-Source-systems chapter: `Ch16 (eBPF and kernel programmability)`.
+Foundational principle: eBPF (verifier, JIT, maps, kprobes / tracepoints / XDP / TC / LSM attachment points). Canonical references: kernel.org BPF documentation, Brendan Gregg's *BPF Performance Tools*, the Aya book.
 
 ## Component context
 
@@ -84,7 +84,7 @@ The eBPF sink is the inverse direction: BPF programs (running in the kernel) pub
 
 When `v0.4` lands token-level SLOs ([`NFR-OBS04`](../01-requirements/non-functional.md)), the aggregator faces the cardinality problem directly: a production gateway sees millions of unique `(tenant, model, route)` combinations and hundreds of millions of tokens per day. We cannot keep exact per-group counts on the hot path; we use approximate data structures that give us bounded memory and bounded error.
 
-References: `advanced/ch09 (streaming and randomized algorithms)`, `systems/ch10 (data-intensive algorithms)`.
+References: streaming and randomized algorithms (Cormode–Muthukrishnan Count–Min Sketch, Flajolet et al. HyperLogLog, Vitter's reservoir sampling); data-intensive algorithms for cardinality and heavy-hitter approximation under bounded memory (CLRS ch. 9; Cormode and Yi, *Small Summaries for Big Data*, Cambridge 2020).
 
 ### HyperLogLog (HLL) for cardinality
 

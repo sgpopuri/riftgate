@@ -1,7 +1,7 @@
 # 002. Async Runtime
 
 > **Status:** `recommended` — Tokio multi-threaded runtime as the only embedded runtime in `v0.1`; thread-per-core runtimes (`monoio`, `glommio`) revisited at the `v0.2` retro behind the `Scheduler` trait. See [ADR 0003](../06-adrs/0003-tokio-multithread-default.md).
-> **Source-systems chapters:** `Ch2 (event loops and the reactor pattern)`, `Ch3 (io_uring)` (for thread-per-core context), `Ch7 (work stealing)`
+> **Foundational topics:** reactor pattern and event loops, `io_uring` (for thread-per-core context), work-stealing schedulers
 > **Related options:** [001](001-io-model.md) (IO model), [003](003-concurrency-model.md) (concurrency model), [004](004-request-queue.md) (request queue)
 > **Related ADR:** [ADR 0003](../06-adrs/0003-tokio-multithread-default.md)
 
@@ -151,13 +151,13 @@ async fn main() -> Result<()> {
 | Compatibility with future thread-per-core `Scheduler` | works (current-thread sharded) | natural fit | natural fit | natural fit | our choice | Door open for [Options 003](003-concurrency-model.md) at `v0.2`. |
 | Risk of runtime types leaking into `riftgate-core` public API | medium (must enforce in review) | medium | low (different ecosystem so it's obvious) | low | none | The trait surface is the contract; reviewers must catch leaks. |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-`Ch2 (event loops and the reactor pattern)` lays out the canonical reactor: an event source (selector / poller), a demultiplexer that maps events to handlers, and a dispatcher that runs handlers cooperatively. Tokio is the textbook reactor implementation in Rust: `mio::Poll` is the demultiplexer, the per-worker scheduler is the dispatcher, futures are the handler protocol. The chapter is also explicit that **the reactor is an implementation detail of the runtime**, not of the application — applications should program against the trait surface (`AsyncRead`, `AsyncWrite`, or our own `AsyncIO`) and let the runtime author worry about the loop. This is exactly the discipline we will enforce on `riftgate-core`: no Tokio types in public API surfaces.
+**Reactor pattern and event loops.** The canonical reactor is described in Schmidt's *Pattern-Oriented Software Architecture, Volume 2* and in libev / libuv's design notes: an event source (selector or poller), a demultiplexer that maps events to handlers, and a dispatcher that runs handlers cooperatively. Tokio is the textbook reactor implementation in Rust — `mio::Poll` is the demultiplexer, the per-worker scheduler is the dispatcher, futures are the handler protocol. The reactor is an implementation detail of the runtime, not of the application: applications should program against the trait surface (`AsyncRead`, `AsyncWrite`, or our own `AsyncIO`) and let the runtime author worry about the loop. This is exactly the discipline we will enforce on `riftgate-core`: no Tokio types in public API surfaces.
 
-`Ch7 (work stealing)` covers the case for and against Tokio's default scheduler. The case for: heterogeneous-cost workloads benefit from cross-worker rebalancing because no single worker becomes a bottleneck. The case against: cross-CPU steals trash the L1/L2 cache for the stolen task, and the overhead is significant for tiny tasks (sub-microsecond). For an LLM gateway, requests are *not* tiny — every request involves at minimum the parser, the router, and the upstream call. The cost model favors work-stealing.
+**Work-stealing schedulers.** The classic Blumofe–Leiserson Cilk-5 paper makes the case for the default: heterogeneous-cost workloads benefit from cross-worker rebalancing because no single worker becomes a bottleneck. The Tokio scheduler post-mortem ("Making the Tokio scheduler 10× faster") and the Go scheduler design notes both observe the cost: cross-CPU steals trash the L1/L2 cache for the stolen task, and the overhead is significant for tiny tasks (sub-microsecond). For an LLM gateway, requests are *not* tiny — every request involves at minimum the parser, the router, and the upstream call. The cost model favors work-stealing.
 
-`Ch3 (io_uring)` notes in passing that thread-per-core runtimes (Seastar, glommio, monoio) are a natural fit for io_uring's per-thread submission queue model: each thread owns its ring, no cross-thread submission contention. This is the strongest argument for revisiting the runtime choice when io_uring lands in `v0.2`. It is also the reason we explicitly decline to lock in a thread-per-core runtime now: the io_uring decision drives the runtime choice, not the other way around.
+**`io_uring` and thread-per-core runtimes.** Thread-per-core runtimes (Seastar, glommio, monoio) are a natural fit for `io_uring`'s per-thread submission-queue model: each thread owns its ring, no cross-thread submission contention. This is the strongest argument for revisiting the runtime choice when `io_uring` lands in `v0.2`. It is also the reason we explicitly decline to lock in a thread-per-core runtime now: the `io_uring` decision drives the runtime choice, not the other way around.
 
 ## 6. Recommendation
 
@@ -193,12 +193,12 @@ Reasoning, restated:
 ## 8. References
 
 1. Tokio project — https://tokio.rs
-2. Tokio scheduler design (Carl Lerche, "Making the Tokio scheduler 10× faster") — https://tokio.rs/blog/2019-10-scheduler
-3. Glommio project — https://github.com/DataDog/glommio
-4. monoio project — https://github.com/bytedance/monoio
-5. Pingora (Cloudflare) blog: "How we built Pingora, the proxy that connects Cloudflare to the Internet" — https://blog.cloudflare.com/how-we-built-pingora-the-proxy-that-connects-cloudflare-to-the-internet/
-6. ScyllaDB / Seastar architecture — https://seastar.io/
-7. Carl Lerche, "Reducing tail latencies with Tokio" — https://tokio.rs/blog/2020-04-preemption
-8. Riftgate source-systems chapter `Ch2 (event loops and the reactor pattern)`
-9. Riftgate source-systems chapter `Ch3 (io_uring)`
-10. Riftgate source-systems chapter `Ch7 (work stealing)`
+2. Carl Lerche, "Making the Tokio scheduler 10× faster" — https://tokio.rs/blog/2019-10-scheduler
+3. Carl Lerche, "Reducing tail latencies with Tokio" — https://tokio.rs/blog/2020-04-preemption
+4. Glommio project — https://github.com/DataDog/glommio
+5. monoio project — https://github.com/bytedance/monoio
+6. Pingora (Cloudflare) blog: "How we built Pingora, the proxy that connects Cloudflare to the Internet" — https://blog.cloudflare.com/how-we-built-pingora-the-proxy-that-connects-cloudflare-to-the-internet/
+7. ScyllaDB / Seastar architecture — https://seastar.io/
+8. Robert D. Blumofe and Charles E. Leiserson, *Scheduling Multithreaded Computations by Work Stealing* (FOCS 1994 / J. ACM 1999) — the foundational work-stealing analysis.
+9. Douglas C. Schmidt, *Reactor: An Object Behavioral Pattern for Demultiplexing and Dispatching Handles for Synchronous Events* (POSA Volume 2) — the canonical reactor reference.
+10. Go runtime scheduler design — https://go.dev/src/runtime/proc.go (top-of-file commentary).

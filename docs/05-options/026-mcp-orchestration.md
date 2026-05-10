@@ -1,10 +1,9 @@
 # 026. MCP Orchestration
 
-> **Status:** `recommended` — gateway-as-broker: a first-class `CapabilityBroker` trait in the extension plane, per-tenant allowlist, WAL audit. Target milestone: `v0.5`. See ADR `0015` (reserved).
-> **Source-systems chapters:** `systems/ch12 (system design patterns)` (ambassador pattern, capability-based security, interception), `systems/ch11 (WAL, journaling, recovery)` (reusing the WAL as an audit ledger)
-> **Sibling-book chapters:** `advanced/ch08 (design of data structures)` (allowlist data structures — prefix trie, interval tree for time-bounded grants, bit-set allowlists), `graphs/ch03 (topological sort and DAGs)` (optional, if tool-dependency graphs become relevant)
+> **Status:** `recommended` — gateway-as-broker: a first-class `CapabilityBroker` trait in the extension plane, per-tenant allowlist, WAL audit. Target milestone: `v0.5`. See [ADR `0015`](../06-adrs/0015-mcp-extension-plane-broker.md) (proposed; targets the open of `v0.5`).
+> **Foundational topics:** ambassador pattern and capability-based security (KeyKOS / EROS / seL4 lineage), write-ahead logging reused as an audit ledger, allowlist data structures (prefix tries, interval trees for time-bounded grants, bit-sets), topological sort over DAGs (optional, for future tool-dependency graphs)
 > **Related options:** [`009 — request log`](009-request-log.md) (WAL we reuse for audit), [`016 — extension mechanism`](README.md) (where MCP plumbing lives), [`017 — multitenancy`](README.md) (the tenancy model MCP rides on)
-> **Related ADR:** ADR `0015` (reserved)
+> **Related ADR:** [ADR `0015`](../06-adrs/0015-mcp-extension-plane-broker.md) (proposed)
 
 ## 1. The decision in one sentence
 
@@ -127,23 +126,23 @@ time_bounded_grants = [
 | Composability with WAL / multitenancy / config | n/a | reuses WAL | reuses WAL + config + multitenancy | same + rewrite scope | Smaller new surface is better. |
 | Can we start here and deepen later? | n/a | yes -> broker | yes -> mediator | terminal | Incrementality matters. |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-From `systems/ch12 (system design patterns)`, the **ambassador pattern** is the canonical framing for what we are doing: a trusted in-path component that speaks a protocol on behalf of an application and enforces policy. The chapter's warning that ambassadors should *understand* the protocol they speak but not *originate* it applies here — the gateway brokers, it does not invent tools.
+**Ambassador pattern (Hohpe / Microsoft *Cloud Design Patterns*).** The ambassador pattern is the canonical framing for what we are doing: a trusted in-path component that speaks a protocol on behalf of an application and enforces policy. The pattern's discipline — ambassadors should *understand* the protocol they speak but not *originate* it — applies directly: the gateway brokers, it does not invent tools.
 
-The **capability-based security** material in the same chapter is directly applicable. A capability is "the right to invoke a named operation on a named resource." MCP's `tools/call` is exactly this shape; a per-tenant allowlist is exactly the capability set. This is the pedagogical core of the resulting LLD and ADR.
+**Capability-based security (KeyKOS, EROS, seL4; Miller, *Robust Composition*).** A capability is "the right to invoke a named operation on a named resource." MCP's `tools/call` is exactly this shape; a per-tenant allowlist is exactly the capability set. The capability-systems literature (KeyKOS, EROS, seL4, and Mark Miller's PhD thesis on object-capability security) is the pedagogical core of the resulting LLD and ADR.
 
-From `systems/ch11 (WAL, journaling, recovery)`, the insight is that an audit log is architecturally *exactly* a WAL: append-only, recoverable, replayable. Reusing `riftgate-replay` for MCP audit events costs near-zero new infrastructure. A forensic query ("replay every `execute_sql` call by tenant X on Tuesday") is a WAL replay with a filter predicate.
+**Write-ahead logging reused as an audit ledger (Mohan et al., *ARIES*).** An audit log is architecturally exactly a WAL: append-only, recoverable, replayable. Reusing `riftgate-replay` for MCP audit events costs near-zero new infrastructure. A forensic query ("replay every `execute_sql` call by tenant X on Tuesday") is a WAL replay with a filter predicate.
 
-From `advanced/ch08 (design of data structures)`, the allowlist data-structure design space is richer than it first appears:
+**Allowlist data structures.** The allowlist data-structure design space is richer than it first appears (Knuth TAOCP §6.3, CLRS chs. 6 and 14, the standard data-structures literature):
 
-- A **prefix trie** for resource URIs (`s3://acme-datasets/*`) gives O(|path|) lookup and natural support for hierarchical grants.
+- A **prefix trie / radix tree** for resource URIs (`s3://acme-datasets/*`) gives O(|path|) lookup and natural support for hierarchical grants.
 - An **interval tree** for time-bounded grants (`until = 2026-06-01T00:00:00Z`) handles the "this permission expires" use case in O(log n).
 - A **bit-set** over a fixed tool registry gives O(1) allow/deny on the common path — useful when the tool set is small and enumerable.
 
 A production impl is likely a *composition* of these: bit-set for the common case, trie for resource prefixes, interval tree for time-bounded overrides.
 
-From `graphs/ch03 (topological sort and DAGs)`, if (as anticipated) tool-dependency graphs become a feature — "tool B may only be called after tool A has been called in this session" — a DAG-based policy representation with topological-sort-checked invocations is the shape that fits. We do not need this in `v0.5`; we note the door.
+**Topological sort over DAGs (Kahn 1962; CLRS ch. 22).** If (as anticipated) tool-dependency graphs become a feature — "tool B may only be called after tool A has been called in this session" — a DAG-based policy representation with topological-sort-checked invocations is the shape that fits. We do not need this in `v0.5`; we note the door.
 
 ## 6. Recommendation
 
@@ -188,11 +187,14 @@ Concretely:
 
 1. Model Context Protocol specification — <https://modelcontextprotocol.io/>
 2. Anthropic, *Introducing the Model Context Protocol* (announcement post) — original positioning.
-3. Jonathan Shapiro et al., *EROS: a fast capability system* — the academic grounding for the capability-broker framing.
-4. AWS, *Cedar language specification* — <https://www.cedarpolicy.com/>
-5. Open Policy Agent — <https://www.openpolicyagent.org/>
-6. Envoy Proxy, *External Authorization filter* documentation — the gateway-as-authorizer design pattern we are channeling.
-7. Riftgate source-systems chapter `Ch12 (system design patterns)`
-8. Riftgate source-systems chapter `Ch11 (WAL, journaling, recovery)`
-9. Riftgate sibling-book chapter `advanced/ch08 (design of data structures)`
-10. Riftgate sibling-book chapter `graphs/ch03 (topological sort and DAGs)`
+3. Jonathan Shapiro, Jonathan Smith, David Farber, *EROS: a fast capability system* (SOSP 1999).
+4. Mark S. Miller, *Robust Composition: Towards a Unified Approach to Access Control and Concurrency Control* (PhD thesis, Johns Hopkins, 2006) — object-capability security.
+5. Norm Hardy, *KeyKOS Architecture* (1985) — the original capability-system reference.
+6. AWS, *Cedar language specification* — <https://www.cedarpolicy.com/>
+7. Open Policy Agent — <https://www.openpolicyagent.org/>
+8. Envoy Proxy, *External Authorization filter* documentation — the gateway-as-authorizer design pattern we are channeling.
+9. Microsoft Azure, *Cloud Design Patterns: Ambassador* — https://learn.microsoft.com/en-us/azure/architecture/patterns/ambassador
+10. C. Mohan, Don Haderle, Bruce Lindsay, Hamid Pirahesh, Peter Schwarz, *ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging* (ACM TODS 1992).
+11. Donald E. Knuth, *The Art of Computer Programming, Volume 3: Sorting and Searching* (2nd ed., 1998) — §6.3 on digital searching (tries).
+12. A. B. Kahn, *Topological sorting of large networks* (Communications of the ACM, 1962).
+13. Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein, *Introduction to Algorithms* (CLRS, 4th ed.) — chapters 14 (interval trees) and 22 (topological sort).

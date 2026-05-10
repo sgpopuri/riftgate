@@ -2,9 +2,9 @@
 
 > The architecture in one document. Subsystem-level low-level designs live in [`../04-design/`](../04-design/). Decision rationale lives in [`../05-options/`](../05-options/) and [`../06-adrs/`](../06-adrs/).
 
-## 1. The three planes
+## 1. The four planes
 
-Riftgate is organized as three planes, each with a clear responsibility and a clear way to extend it:
+Riftgate is organized as four planes, each with a clear responsibility and a clear way to extend it:
 
 ```mermaid
 flowchart TB
@@ -48,7 +48,7 @@ flowchart TB
     CTRL -.-> MCPBroker
 ```
 
-The three planes communicate through narrow, typed interfaces. Failures in one plane should not silently propagate to another. Plane boundaries are also the natural seams for extension and replacement.
+The four planes communicate through narrow, typed interfaces. Failures in one plane should not silently propagate to another. Plane boundaries are also the natural seams for extension and replacement.
 
 - **[Data plane](data-plane.md)** — the per-request hot path. Receives bytes, parses, schedules, dispatches, frames responses, persists to the request log.
 - **[Extension plane](extension-plane.md)** — pluggable behavior: filters (request/response transforms), routing strategies, anything a user wants to inject without forking.
@@ -62,13 +62,13 @@ The data plane and extension plane are united by a single trait surface defined 
 ```rust
 // Sketch — actual signatures will live in riftgate-core and may differ
 pub trait AsyncIO { /* register fd, await readiness, submit work */ }
-pub trait StreamParser { /* incremental, FSM-based; Ch13 */ }
+pub trait StreamParser { /* incremental, table-driven FSM */ }
 pub trait Scheduler { /* dispatch tasks to workers */ }
-pub trait Queue<T> { /* lock-free where possible; Ch4 */ }
+pub trait Queue<T> { /* lock-free MPMC where possible */ }
 pub trait RateLimiter { /* token bucket / leaky bucket / GCRA; v0.2+ */ }
-pub trait Allocator { /* arena, slab, system; Ch14 */ }
-pub trait TimerSubsystem { /* hierarchical wheels; Ch15 */ }
-pub trait WAL { /* append-only, fsync semantics; Ch11 */ }
+pub trait Allocator { /* per-request arena, slab, system malloc */ }
+pub trait TimerSubsystem { /* hierarchical / hashed timing wheels */ }
+pub trait WAL { /* append-only, fsync semantics, ARIES-style recovery */ }
 pub trait Filter { /* request/response transform */ }
 pub trait Router { /* select backend(s) for a request */ }
 pub trait CapabilityBroker { /* MCP tool/resource authorization; v0.5+ */ }
@@ -166,7 +166,7 @@ flowchart LR
     Channel -.drop on full.-> Drop[Dropped<br/>+ counter]
 ```
 
-This pattern is from `Ch5 (ring buffers, drop-on-full logging)` and `Ch8 (backpressure as policy)`.
+This is the bounded ring-buffer drop-on-full pattern (LMAX Disruptor lineage) combined with backpressure-as-policy: events are dropped explicitly and counted, never buffered indefinitely.
 
 ## 7. Configuration model (default)
 

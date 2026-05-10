@@ -4,7 +4,7 @@
 
 Riftgate is a repo-first exploration of the systems decisions behind a robust LLM gateway. The goal is not to start with a grand product announcement. The goal is to make the specs, options, decisions, architecture notes, and eventually code public as the project takes shape.
 
-**Status: `v0.0` complete (2026-05-03); `v0.1` (walking skeleton — first Rust binary) is the next milestone.** No Rust code yet. The `v0.0` design surface — vision, requirements, architecture, low-level design notes, eight foundational Options docs, and eight ADRs — is in the repo. `v0.1` adds the first crate scaffolding plus three remaining prerequisite Options docs (`006-timer-subsystem`, `013-observability-sink`, `015-config-model`).
+**Status: `v0.0` complete (2026-05-03); `v0.1` (walking skeleton — first Rust binary) is the next milestone.** No Rust code yet. The `v0.0` design surface — vision, requirements, four-plane architecture (data, control, extension, observability), ten low-level design notes, nine Options docs (the seven foundational from the original octet plus the two from the 2026-05 research pass — [`021-rate-limiting`](docs/05-options/021-rate-limiting.md), [`026-mcp-orchestration`](docs/05-options/026-mcp-orchestration.md)), eight accepted ADRs (`0001`–`0008`), and two ADRs in `proposed` status ([`0009`](docs/06-adrs/0009-rate-limiter-trait-in-proc-only.md), [`0015`](docs/06-adrs/0015-mcp-extension-plane-broker.md)) — is in the repo. The `v0.0` retrospective is captured separately in [`docs/02a-v0.0-retrospective.md`](docs/02a-v0.0-retrospective.md). `v0.1` adds the first crate scaffolding plus three remaining prerequisite Options docs (`006-timer-subsystem`, `013-observability-sink`, `015-config-model`).
 
 ## Why Riftgate exists
 

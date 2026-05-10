@@ -1,10 +1,9 @@
 # 021. Rate limiting
 
-> **Status:** `recommended` — trait-based rate limiter with a single in-proc token-bucket impl in `v1.0`; distributed impls catalogued as a future extension of the same trait. See ADR `0009` (reserved).
-> **Source-systems chapters:** `systems/ch12 (system design patterns)`, `systems/ch08 (pub/sub messaging — backpressure as policy)`
-> **Sibling-book chapters:** `hashing/ch07 (consistent hashing)` (sharding a distributed counter), `trees/ch04 (heaps and priority queues)` (which request gets throttled first when several are at the edge)
+> **Status:** `recommended` — trait-based rate limiter with a single in-proc token-bucket impl in `v0.2` (per-instance only through `v1.0`); distributed impls catalogued as a future extension of the same trait. See [ADR `0009`](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (proposed; targets the open of `v0.2`).
+> **Foundational topics:** rate-limiting algorithms (fixed window, sliding window, token bucket, leaky bucket, GCRA), backpressure as policy, consistent hashing (for future distributed sharding), priority heaps (for which request gets throttled first), lock-free state for the in-proc impl
 > **Related options:** [`011 — circuit breaker`](011-circuit-breaker.md) (same family: protection primitives), [`012 — backpressure`](012-backpressure.md) (the policy complement)
-> **Related ADR:** ADR `0009` (reserved)
+> **Related ADR:** [ADR `0009`](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (proposed)
 
 ## 1. The decision in one sentence
 
@@ -187,7 +186,7 @@ Wins: no per-request network hop; resilient to state-service outages. Costs: *ap
 
 Route each subject to a single replica; rate limit on that replica only. The limiter itself is local; the *request ingress* is distributed.
 
-Wins: exact, no inter-replica coordination. Costs: requires a front-door LB that consistent-hashes by subject; breaks under replica add/remove unless bounded-load consistent hashing is used. Relevant chapter: `hashing/ch07 (consistent hashing)`.
+Wins: exact, no inter-replica coordination. Costs: requires a front-door LB that consistent-hashes by subject; breaks under replica add/remove unless bounded-load consistent hashing is used (Mirrokni–Thorup–Zadimoghaddam, 2016).
 
 #### 3.7.4. CRDT-backed counter (research)
 
@@ -210,17 +209,17 @@ Operational-transform or CRDT-style counters that converge. Academic interest; r
 | Existing reference impls in Rust | everywhere | rare | `governor`-ish | `governor`, `leaky-bucket` | `leaky-bucket` | `governor::quota` | `redis-throttled`, `tonic-limit` | Reduces our implementation cost if we pick one the ecosystem supports. |
 | Fits Riftgate trait shape | yes | yes | yes | yes | awkward (queue is stateful) | yes | yes | Pluggability is a Riftgate principle. |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-From `systems/ch12 (system design patterns)`, the resilience-patterns section frames rate limiting as a protection primitive in the same family as circuit breakers: both convert a *"downstream failure mode"* into a *"local policy decision"*. The chapter's advice against bolt-on implementations applies directly: if we ever want a rate limiter that collaborates with our circuit breaker (see [Options `011`](011-circuit-breaker.md)), they both need to live inside the same kernel and speak the same event vocabulary.
+**Rate limiting as a resilience primitive (Nygard, *Release It*).** The resilience-patterns literature frames rate limiting as a protection primitive in the same family as circuit breakers: both convert a downstream failure mode into a local policy decision. The argument against bolt-on implementations applies directly here: if we ever want a rate limiter that collaborates with our circuit breaker (see [Options `011`](011-circuit-breaker.md)), they both need to live inside the same kernel and speak the same event vocabulary.
 
-From `systems/ch08 (pub/sub messaging — backpressure as policy)`, the backpressure-as-policy framing is directly relevant: a rejected request is a form of backpressure. A rate limiter is a synchronous, predictable back-pressure source; we can compose it with the queue-depth-based backpressure of Options [`012`](012-backpressure.md) without inventing a new abstraction.
+**Backpressure as policy.** A rejected request is a form of backpressure. A rate limiter is a synchronous, predictable backpressure source; we can compose it with the queue-depth-based backpressure of Options [`012`](012-backpressure.md) without inventing a new abstraction. Hellerstein's writings on backpressure and the distributed-systems literature on flow control both make this explicit.
 
-From `hashing/ch07 (consistent hashing)`, the key insight for a future distributed impl: if we ever want to shard rate-limit state across replicas, consistent hashing by subject is the cleanest approach because it lets us avoid cross-replica coordination for the common case. Bounded-load consistent hashing (Mirrokni et al., Google 2016) handles the replica-add/remove case without thundering herds.
+**Consistent hashing for distributed sharding (Karger et al., 1997; Mirrokni et al., 2016).** The key insight for a future distributed impl: if we ever want to shard rate-limit state across replicas, consistent hashing by subject is the cleanest approach because it lets us avoid cross-replica coordination for the common case. Bounded-load consistent hashing (Mirrokni–Thorup–Zadimoghaddam, Google 2016) handles the replica-add/remove case without thundering herds.
 
-From `trees/ch04 (heaps and priority queues)`, the relevant idea is *which* request gets throttled when multiple are at the limit boundary. A FIFO rejection order is the default; a priority-aware rejection (keep premium requests alive, drop batch first) is the direction Options [`022`](README.md) (fairness scheduling) would take us.
+**Priority heaps for fairness (CLRS, ch. 6).** The question of *which* request gets throttled when multiple are at the limit boundary is a priority-queue question. A FIFO rejection order is the default; a priority-aware rejection (keep premium requests alive, drop batch first) is the direction Options [`022`](README.md) (fairness scheduling) would take us, and that direction lives on top of a binary or d-ary heap.
 
-From `systems/ch04 (lock-free structures)` (indirectly): the in-proc token-bucket is a textbook lock-free candidate — a single `AtomicU64` packing `(tokens_scaled, last_refill_nanos)` admits a compare-exchange loop with no mutex. We will implement it exactly this way and cite the chapter in the LLD.
+**Lock-free state for the in-proc impl.** The in-proc token-bucket is a textbook lock-free candidate — a single `AtomicU64` packing `(tokens_scaled, last_refill_nanos)` admits a compare-exchange loop with no mutex. The Vyukov-style atomic-pack pattern and McKenney's *Is Parallel Programming Hard?* are the canonical references; the LLD will cite them directly.
 
 ## 6. Recommendation
 
@@ -245,7 +244,7 @@ Concretely:
        pub backend: Option<BackendId>,
    }
    ```
-2. The default impl, `TokenBucketLimiter`, uses a sharded `DashMap<SubjectKey, AtomicBucketState>` internally, citing `systems/ch04 (lock-free structures)`. Sharding is by subject hash to avoid a single contended map.
+2. The default impl, `TokenBucketLimiter`, uses a sharded `DashMap<SubjectKey, AtomicBucketState>` internally with a single-`AtomicU64` packed bucket state on the lock-free fast path (Vyukov-style CAS loop). Sharding is by subject hash to avoid a single contended map.
 3. The trait signature is deliberately designed so a future `RedisGcraLimiter` can implement it without changing callers. `check` returns `LimitDecision` rather than `bool` so the distributed impl can surface `Retry-After` semantics without bolting on a second method.
 4. Configuration knobs (per-route): `rate_per_sec`, `burst`, `cost_fn` (default: `1 per request`; optional: `token_count(prompt)` for TPM limiting).
 5. Denied requests return `429 Too Many Requests` with `Retry-After`. Denied requests are counted as first-class in OTel (so operators can see throttle pressure).
@@ -269,13 +268,13 @@ Concretely:
 
 1. Poul-Henning Kamp, *The Rules for Building a Rate Limiter* (a collection of practitioner posts) — <https://www.varnish-cache.org/>
 2. Brandur Leach, *Rate Limiting with GCRA and Redis* — <https://brandur.org/rate-limiting>
-3. Jeff Dean, *Numbers Every Programmer Should Know* — standard reference for latency-budget conversations around rate-limit hot-path cost.
-4. Vahab Mirrokni, Mikkel Thorup, Morteza Zadimoghaddam, *Consistent Hashing with Bounded Loads* (Google, 2016) — <https://arxiv.org/abs/1608.01350>
-5. Rust crates: [`governor`](https://docs.rs/governor/), [`leaky-bucket`](https://docs.rs/leaky-bucket/), [`tower::limit`](https://docs.rs/tower/latest/tower/limit/).
-6. Cloudflare, *How we built rate limiting capable of scaling to millions of domains* (various engineering blog posts).
-7. Nginx, [`limit_req_zone` documentation](http://nginx.org/en/docs/http/ngx_http_limit_req_module.html) — practical production reference.
-8. Riftgate source-systems chapter `Ch12 (system design patterns)`
-9. Riftgate source-systems chapter `Ch8 (pub/sub messaging — backpressure as policy)`
-10. Riftgate sibling-book chapter `hashing/ch07 (consistent hashing)`
-11. Riftgate sibling-book chapter `trees/ch04 (heaps and priority queues)`
-12. Riftgate source-systems chapter `Ch4 (lock-free structures)` (for the lock-free in-proc impl)
+3. ITU-T I.371 / ATM Forum TM 4.1 — original GCRA specification.
+4. David Karger et al., *Consistent Hashing and Random Trees* (STOC 1997).
+5. Vahab Mirrokni, Mikkel Thorup, Morteza Zadimoghaddam, *Consistent Hashing with Bounded Loads* (Google, 2016) — <https://arxiv.org/abs/1608.01350>
+6. John D. C. Little, *A Proof for the Queuing Formula L = λW* (Operations Research, 1961) — Little's law as the formal substrate for rate vs latency reasoning.
+7. Michael Nygard, *Release It! Design and Deploy Production-Ready Software* (2nd ed., 2018) — rate-limit and circuit-breaker patterns.
+8. Paul E. McKenney, *Is Parallel Programming Hard, And, If So, What Can You Do About It?* — https://mirrors.edge.kernel.org/pub/linux/kernel/people/paulmck/perfbook/perfbook.html
+9. Rust crates: [`governor`](https://docs.rs/governor/), [`leaky-bucket`](https://docs.rs/leaky-bucket/), [`tower::limit`](https://docs.rs/tower/latest/tower/limit/).
+10. Cloudflare, *How we built rate limiting capable of scaling to millions of domains* (various engineering blog posts).
+11. Nginx, [`limit_req_zone` documentation](http://nginx.org/en/docs/http/ngx_http_limit_req_module.html) — practical production reference.
+12. Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein, *Introduction to Algorithms* (CLRS, 4th ed.) — chapter 6 on heaps and priority queues.

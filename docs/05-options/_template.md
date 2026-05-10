@@ -1,7 +1,7 @@
 # NNN. <Decision name in plain English>
 
 > **Status:** `proposed` | `recommended` | `accepted` (see ADR-NNNN) | `superseded by NNN`
-> **Source-systems chapter(s):** `chXX_*`, `chYY_*`
+> **Foundational topics:** `<technology / pattern / paper>`, `<technology / pattern / paper>`
 > **Related options:** NNN, NNN
 > **Related ADR:** [ADR NNNN](../06-adrs/NNNN-<slug>.md)
 
@@ -47,9 +47,9 @@ For each candidate, ≥3, ≤5:
 
 Criteria should be specific and Riftgate-aware (e.g. "compatibility with our trait surface" rather than "ease of use"). 5-10 criteria is the typical range.
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-Direct citations, by plain-text chapter title and number, to the source-systems references that informed this decision. Quote distinctive passages where useful. The source-systems curriculum is not a public sibling repo, so do not link to it — cite by title (e.g. `Ch3 (io_uring)`, `Ch11 (WAL and recovery)`) and let the prose carry the argument.
+The technologies, patterns, and named systems that inform this decision. Cite the technique directly — for example, "`io_uring`'s shared SQ/CQ ring model" or "ARIES-style write-ahead logging" — and let the prose carry the argument. The full external bibliography (papers, RFCs, kernel documentation, source repositories) lives in §8 References below; this section is for explaining *why* the technique applies, not for the link list.
 
 ## 6. Recommendation
 
@@ -66,7 +66,7 @@ For each rejected candidate, one sentence: why we're saying no, and what it woul
 
 ## 8. References
 
-Books, papers, blog posts, source code, kernel commits — anything cited or worth following up. Use a numbered list; the prose can reference `[1]`, `[2]`, etc.
+Concrete external sources only — RFCs, kernel documentation, papers, source repositories, well-known projects, books. Persona P3 (Maya) should be able to follow every citation without access to any private material. Use a numbered list; the prose can reference `[1]`, `[2]`, etc.
 
 ---
 

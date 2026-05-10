@@ -60,7 +60,7 @@ No dependency on the WAL, the filter chain, the router, or the scheduler.
 
 - **Pure function of (subject, cost, state).** No side effects outside the atomic bucket update.
 - **Lazy refill.** No per-subject timer; on each check, compute tokens-since-last-refill.
-- **Sharded internal map.** Subject hash picks a shard; each shard is its own `DashMap` to avoid a single contended structure at high subject count. Citation: `systems/ch04 (lock-free structures)`.
+- **Sharded internal map.** Subject hash picks a shard; each shard is its own `DashMap` to avoid a single contended structure at high subject count. Foundational reference: lock-free structures (Michael–Scott queue, Vyukov-style atomic-pack patterns; McKenney's *Is Parallel Programming Hard?*).
 - **Denied requests are first-class.** They emit OTel counter events, are NOT written to the WAL (at the `Deny` level — the request never reached the dispatch path), and return `429` with `Retry-After` computed from bucket-depletion time.
 - **Configuration is per-route.** Operators configure `rate_per_sec`, `burst`, and optional `cost_fn` in `riftgate.toml`. Default cost is `1`.
 - **The trait is not the config.** The config is a separate `RateLimitPolicy` struct; impls of `RateLimiter` consume the policy. This keeps the trait usable when config is dynamic (`v1.0` CRD-driven config).

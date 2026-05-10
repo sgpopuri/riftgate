@@ -35,7 +35,7 @@ pub trait WAL: Send + Sync {
 
 Decision rationale: [Options 009 (request log)](../05-options/009-request-log.md).
 
-Source-systems chapters: `Ch9 (LSM trees and storage engines)`, `Ch11 (WAL and recovery)`.
+Foundational principles: write-ahead logging and ARIES-style crash recovery (Mohan et al., *ARIES*, ACM TODS 1992); LSM-tree storage engines (O'Neil et al.; RocksDB, LevelDB, Cassandra) for the future embedded-store path.
 
 ## Component context
 
@@ -64,7 +64,7 @@ Mode is per-instance, not per-request. A single config knob.
 ### Pitfalls
 
 - **`fsync` does not always do what you think.** Disk caches may lie about durability. We document this and let users opt for `O_DIRECT` if they need a stronger guarantee.
-- **Directory `fsync` for atomic file rename** on segment rotation. Easy to forget; covered in `Ch11 (WAL and recovery)`.
+- **Directory `fsync` for atomic file rename** on segment rotation. Easy to forget; well-documented in the ARIES paper and in the Postgres / SQLite WAL implementations.
 - **Replay must be idempotent at the record level.** Each record carries enough information that replaying it twice has the same effect as once.
 - **PII in logs.** The WAL captures full request/response bodies. Production deployments must encrypt the log, control access, and apply retention policies.
 

@@ -30,7 +30,7 @@ pub trait TimerSubsystem: Send + Sync {
 
 Decision rationale: [Options 006 (timer subsystem)](../05-options/006-timer-subsystem.md).
 
-Source-systems chapter: `Ch15 (timer wheels and scheduling primitives)`.
+Foundational principles: hashed and hierarchical timing wheels (Varghese and Lauck, *Hashed and Hierarchical Timing Wheels: Data Structures for the Efficient Implementation of a Timer Facility*, SOSP 1987); low-level synchronization primitives (`futex`, mutex, condvar) per Drepper's *Futexes Are Tricky* and the Linux `futex(2)` man page.
 
 ## Component context
 

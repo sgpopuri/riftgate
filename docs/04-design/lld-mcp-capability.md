@@ -52,7 +52,7 @@ pub trait CapabilityBroker: Send + Sync {
 
 Decision rationale, candidates, and rejected alternatives: see [Options `026` (MCP orchestration)](../05-options/026-mcp-orchestration.md).
 
-Source-systems chapter: `Ch12 (system design patterns — ambassador, capability-based security)`. Supplementary data-structure reference: `advanced/ch08 (design of data structures)`.
+Foundational principles: ambassador pattern (Microsoft *Cloud Design Patterns*; Hohpe, *Enterprise Integration Patterns*); object-capability security (KeyKOS / EROS / seL4; Mark Miller, *Robust Composition*). Supplementary data-structure references inline below.
 
 ## Component context
 
@@ -93,9 +93,9 @@ It emits typed `McpRequest` values. It does NOT rewrite payloads.
 
 A production `AllowlistBroker` composes three structures, each chosen for its case:
 
-- **Bit-set over a fixed tool registry** (`advanced/ch08_design_data_structures.md`). O(1) allow/deny on the common path when the tool vocabulary is small and enumerable (e.g. 64-128 tools). Memory is `⌈|tools| / 64⌉` u64 words per tenant.
-- **Prefix trie for resource URIs** (`trees/ch05_tries_string_trees.md`). O(|path|) match for patterns like `s3://acme-datasets/*` or `https://docs.acme.com/*`. Handles hierarchical grants naturally.
-- **Interval tree for time-bounded grants** (`trees/ch07_segment_fenwick_query_trees.md`). O(log n) lookup for "this permission expires at T." Supports the common `time_bounded_grants` config shape.
+- **Bit-set over a fixed tool registry** (the standard data-structures literature on bit-vectors and bitmap indexes). O(1) allow/deny on the common path when the tool vocabulary is small and enumerable (e.g. 64-128 tools). Memory is `⌈|tools| / 64⌉` u64 words per tenant.
+- **Prefix trie for resource URIs** (Knuth TAOCP §6.3 on digital searching; the radix-tree / patricia-tree literature). O(|path|) match for patterns like `s3://acme-datasets/*` or `https://docs.acme.com/*`. Handles hierarchical grants naturally.
+- **Interval tree for time-bounded grants** (CLRS ch. 14; segment-tree and Fenwick-tree variants for range queries). O(log n) lookup for "this permission expires at T." Supports the common `time_bounded_grants` config shape.
 
 The composition order on a `tools/call`:
 

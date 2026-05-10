@@ -1,7 +1,7 @@
 # 008. Stream Framing
 
 > **Status:** `recommended` — SSE (`text/event-stream`) as the only client-facing streaming framing in `v0.1`; NDJSON considered as a `v0.2`+ opt-in; gRPC bidirectional streaming and WebSockets deferred to `v1.0+` per [Vision §8](../00-vision.md). See [ADR 0008](../06-adrs/0008-sse-default-grpc-future.md).
-> **Source-systems chapters:** `Ch5 (ring buffers and zero-copy)`, `Ch13 (FSM and protocol parsing)`
+> **Foundational topics:** ring buffers and zero-copy I/O on the response path, FSM-based streaming framers (line-delimited and length-prefixed)
 > **Related options:** [001](001-io-model.md) (IO model), [007](007-protocol-parser.md) (protocol parser), [027](README.md) (upstream protocols, optional)
 > **Related ADR:** [ADR 0008](../06-adrs/0008-sse-default-grpc-future.md)
 
@@ -148,13 +148,13 @@ data: [DONE]
 | Compatibility with `SseFramer` slot in [`lld-parsing`](../04-design/lld-parsing.md) | natural | possible (NDJSON framer) | requires new impl | requires new impl | trivial | Trait shape is set. |
 | Compatibility with future MCP framing ([Options 026](026-mcp-orchestration.md)) | medium (MCP is JSON-RPC over various transports) | medium | natural (gRPC bidi for MCP) | natural | poor | `v0.5` consideration. |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-`Ch5 (ring buffers and zero-copy)` is most relevant for the *implementation* of the framer, not the format choice. The chapter argues that streaming pipelines should pass byte buffers through with minimum copies: the upstream's chunk arrives in our IO buffer, we framing-detect on the boundary, we hand the original buffer to the response writer with the framing massaged at the edges only. The chapter's matrix of "copies per event" puts SSE-with-zero-copy at one (the `data:` prefix is the only thing we have to add) and NDJSON-with-zero-copy at zero (the upstream's bytes are usable verbatim if the upstream emits NDJSON). For the OpenAI use case, the upstream emits SSE so the copies-per-event for SSE is also zero.
+**Ring buffers and zero-copy I/O on the response path.** The streaming-pipeline literature (LMAX Disruptor design notes, the kernel-level `splice(2)` / `sendfile(2)` documentation, MSG_ZEROCOPY) argues that streaming pipelines should pass byte buffers through with minimum copies: the upstream's chunk arrives in our I/O buffer, we framing-detect on the boundary, we hand the original buffer to the response writer with the framing massaged at the edges only. The relevant copies-per-event accounting puts SSE-with-zero-copy at one (the `data:` prefix is the only thing we have to add) and NDJSON-with-zero-copy at zero (the upstream's bytes are usable verbatim if the upstream emits NDJSON). For the OpenAI use case, the upstream emits SSE, so the copies-per-event for SSE is also zero.
 
-`Ch13 (FSM and protocol parsing)` covers the framer's parser. The relevant guidance: **a streaming framer is a finite state machine, not an event aggregator.** It should yield events as soon as boundaries are unambiguous, never buffer more than the smallest possible amount. SSE's two-character separator (`\n\n`) makes this trivial; NDJSON's single-character separator (`\n`) makes it trivial-er. WebSockets' length-prefixed frames make it bookkeeping-heavy but still streaming; gRPC bidi's HTTP/2 framing makes it framing-on-framing.
+**FSM-based streaming framers.** A streaming framer is a finite state machine, not an event aggregator. It should yield events as soon as boundaries are unambiguous, and never buffer more than the smallest possible amount. SSE's two-character separator (`\n\n`) makes this trivial; NDJSON's single-character separator (`\n`) makes it trivial-er. WebSocket length-prefixed frames make it bookkeeping-heavy but still streaming; gRPC bidi's HTTP/2 framing makes it framing-on-framing.
 
-The chapter is also explicit on edge cases. SSE has half a dozen: CRLF vs LF, comments (`:` lines), multi-line `data:` events, the `[DONE]` sentinel that OpenAI uses, the difference between an empty event and a heartbeat. Each must be in the test suite.
+**Edge cases on the wire.** The W3C SSE specification, the OpenAI streaming docs, and the experience embedded in `EventSource` implementations all enumerate the half-dozen SSE edge cases that must be in the test suite: CRLF vs LF line endings, comments (`:` lines), multi-line `data:` events that should be re-joined with `\n`, the `[DONE]` sentinel OpenAI emits, the difference between an empty event and a heartbeat, very-large events that exceed the chunk boundary.
 
 ## 6. Recommendation
 
@@ -203,5 +203,5 @@ The reasoning, restated:
 6. gRPC over HTTP/2 protocol — https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
 7. Anthropic streaming completions documentation (current SSE; older NDJSON) — https://docs.anthropic.com/en/api/messages-streaming
 8. The `tonic` Rust gRPC crate — https://docs.rs/tonic
-9. Riftgate source-systems chapter `Ch5 (ring buffers and zero-copy)`
-10. Riftgate source-systems chapter `Ch13 (FSM and protocol parsing)`
+9. LMAX Disruptor design (lock-free ring buffer for streaming pipelines) — https://lmax-exchange.github.io/disruptor/
+10. Linux `splice(2)` and `sendfile(2)` man pages — https://man7.org/linux/man-pages/man2/splice.2.html and https://man7.org/linux/man-pages/man2/sendfile.2.html

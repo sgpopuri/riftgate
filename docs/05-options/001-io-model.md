@@ -1,7 +1,7 @@
 # 001. IO Model
 
 > **Status:** `recommended` — start on epoll, add io_uring behind a feature flag in `v0.2`. See [ADR 0002](../06-adrs/0002-start-on-epoll.md).
-> **Source-systems chapters:** `Ch1 (IO models and multiplexing)`, `Ch3 (io_uring)`, `Ch6 (DPDK and kernel bypass)`
+> **Foundational topics:** Unix I/O multiplexing (`epoll`/`kqueue`/IOCP), `io_uring` shared-memory ring submission, DPDK / AF_XDP kernel-bypass networking
 > **Related options:** 002 (async runtime), 003 (concurrency model), 004 (request queue)
 > **Related ADR:** [ADR 0002](../06-adrs/0002-start-on-epoll.md)
 
@@ -82,14 +82,14 @@ The interesting feature: with `IORING_SETUP_SQPOLL`, a kernel thread polls the S
 
 **Why it's interesting.**
 - The first true async-everything interface on Linux. Files, sockets, timers, signals — all unified.
-- Massive syscall reduction. A typical disk-IO benchmark cited in `Ch3 (io_uring)` shows ~100× fewer syscalls than the equivalent libaio + epoll.
+- Massive syscall reduction. Disk-IO benchmarks reported by Axboe in *Efficient IO with io_uring* show ~100× fewer syscalls than the equivalent libaio + epoll.
 - Linked operations: chain `recv → send` so the kernel fires the second when the first completes, no userspace round-trip.
 - Multishot accept: register an accept once, receive a stream of completions for new connections.
 - Provided buffers: kernel selects a buffer from a pool at receive time; userspace doesn't pre-allocate per-fd.
 - Active development, including networking-specific features (zero-copy send, registered eventfd, etc.).
 
 **Where it falls short.**
-- **Security history.** From `Ch3 (io_uring)`: Google's Project Zero attributed roughly 60% of Linux kernel exploits in their 2021-2023 bug-bounty disclosures to io_uring. Android disabled io_uring. Many container runtimes block it by default with seccomp. This is real and we cannot ignore it.
+- **Security history.** Google's Project Zero attributed roughly 60% of Linux kernel exploits in their 2021-2023 bug-bounty disclosures to `io_uring`. Android disabled `io_uring`. Many container runtimes block it by default with seccomp. This is real and we cannot ignore it.
 - **API churn.** liburing (the recommended userspace wrapper) has had multiple semantic changes; raw `io_uring` syscalls are essentially never used directly. Tracking liburing is essentially mandatory.
 - **Verifier-style debugging required.** Subtle bugs (use-after-free of buffers, ordering between linked ops, partial completions) are not caught by the compiler. Production deployments need extensive test infrastructure.
 - **SQPOLL costs a CPU core.** A kernel thread polling the SQ at 100% utilization is the cost of "no syscalls on submit." Worth it on dedicated hardware; expensive in shared environments.
@@ -115,7 +115,7 @@ io_uring_cqe_seen(&ring, cqe);
 **What it is.** The Data Plane Development Kit. A Linux-Foundation project that gives userland direct, zero-syscall access to NIC hardware via Poll Mode Drivers (PMDs). The kernel's network stack is bypassed entirely. Application owns memory pools (`rte_mempool`), packet buffers (`rte_mbuf`), and per-queue rings (`rte_ring`). Uses VFIO or UIO for safe userland access to PCIe devices.
 
 **Why it's interesting.**
-- The performance ceiling. From `Ch6 (DPDK and kernel bypass)`: per-packet kernel overhead is ~5-10µs vs the ~67ns budget for line-rate 10 Gbps with 64-byte frames. DPDK avoids this entirely.
+- The performance ceiling. Per the DPDK programmer's guide and the kernel-bypass literature, per-packet kernel overhead is ~5-10µs versus the ~67ns budget for line-rate 10 Gbps with 64-byte frames. DPDK avoids this entirely.
 - 14+ million packets per second per core demonstrated in production firewalls and load balancers.
 - Zero copies, zero context switches, zero interrupts (busy-polled).
 - Used by NFV, financial trading, 5G core networks.
@@ -167,17 +167,17 @@ io_uring_cqe_seen(&ring, cqe);
 | Compatibility with future eBPF integration (Options 014) | excellent | n/a (Linux only) | excellent | poor | excellent | Our differentiation pillar. |
 | Compatibility with the [`AsyncIO`](../04-design/lld-io-runtime.md) trait | natural fit | natural fit | natural fit (with completion adapter) | trait would need substantial change | trait would need substantial change | Pluggability is a Riftgate principle. |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-From `Ch1 (IO models and multiplexing)`, the C10K narrative makes the case for epoll on Linux directly: "**epoll** is the game-changer for Linux" — a comment about it being O(1) for ready-set retrieval where `select` and `poll` are O(n). The chapter's edge-triggered vs level-triggered table makes the practical point that **most production servers should default to LT and opt in to ET only with measured benefit**. nginx is the canonical ET production server.
+**Unix I/O multiplexing.** The C10K narrative makes the case for `epoll` on Linux directly: it is O(1) for ready-set retrieval where `select` and `poll` are O(n) in the watched-fd count. The edge-triggered vs level-triggered split is well-explored in the kernel man pages and in Kegel's C10K essay; the practical posture is that most production servers should default to LT and opt in to ET only with measured benefit, with nginx as the canonical ET production server.
 
-From `Ch3 (io_uring)`, three statements stand out for our decision:
+**`io_uring` shared-memory ring submission.** Three claims from the `io_uring` literature shape this decision:
 
-1. The benchmark table cited there (network workload, ~180k req/s on epoll vs ~210k on io_uring vs ~240k on multishot accept) — meaningful but not 10×.
-2. The disk-IO 100× syscall reduction figure attributed to Jens Axboe — meaningful for storage, less so for our networking-only path.
-3. The security analysis: "**~60% of Linux kernel exploits in Google's bug bounty (2021-2023)**" attributed to io_uring, with Android disabling it and most container runtimes blocking it by default. This is the single most important caveat in the chapter for an OSS data plane.
+1. Network-workload benchmarks (≈180k req/s on `epoll` vs ≈210k on `io_uring` vs ≈240k on multishot accept) — meaningful but not 10×, and not at our QPS targets for `v0.2`.
+2. Axboe's disk-IO 100× syscall-reduction figure — meaningful for storage, less so for our networking-only hot path (the WAL is async via a worker, not on the request path).
+3. Project Zero's security disclosures: ~60% of recent Linux kernel exploits in their 2021-2023 bug bounty involved `io_uring`, with Android disabling it and most container runtimes blocking it by default. This is the single most important caveat for an OSS data plane.
 
-From `Ch6 (DPDK and kernel bypass)`, the closing "when to use / when to avoid" section is unambiguous: **DPDK is for Mpps and µs latency demands**, not for typical web/DB workloads where "application logic dominates." Our application logic dominates. The chapter's matrix (kernel ~1 Mpps → AF_XDP ~8 Mpps → XDP ~10 Mpps drop / ~24 Mpps redirect → DPDK ~14 Mpps) tells us where each lives, and that none of them are needed for an LLM gateway.
+**Kernel-bypass networking (DPDK / AF_XDP).** The "when to use / when to avoid" guidance in the DPDK programmer's guide and the XDP tutorial is unambiguous: DPDK is for Mpps and µs latency demands, not for typical web/DB workloads where application logic dominates. Our application logic dominates by orders of magnitude (inference latency in seconds, packet processing in nanoseconds). The published packet-rate matrix (kernel ≈1 Mpps → AF_XDP ≈8 Mpps → XDP ≈10 Mpps drop / ≈24 Mpps redirect → DPDK ≈14 Mpps) tells us where each lives, and that none of them are needed for an LLM gateway.
 
 ## 6. Recommendation
 
@@ -210,9 +210,8 @@ The reasoning, restated:
 2. Dan Kegel, *The C10K problem* — http://www.kegel.com/c10k.html
 3. Jonathan Corbet, *Ringing in a new asynchronous I/O API* (LWN.net, 2019) — https://lwn.net/Articles/776703/
 4. Jens Axboe, *Efficient IO with io_uring* (kernel.dk, 2019) — https://kernel.dk/io_uring.pdf
-5. Google Project Zero blog posts on io_uring vulnerabilities (2021-2023) — collected via https://googleprojectzero.blogspot.com/
-6. Linux Foundation, *DPDK overview* — https://www.dpdk.org/overview/
+5. Google Project Zero blog posts on `io_uring` vulnerabilities (2021-2023) — https://googleprojectzero.blogspot.com/
+6. Linux Foundation, *DPDK overview* and programmer's guide — https://www.dpdk.org/overview/ and https://doc.dpdk.org/guides/prog_guide/
 7. Toke Høiland-Jørgensen, *XDP and AF_XDP overview* — https://github.com/xdp-project/xdp-tutorial
-8. Riftgate source-systems chapter `Ch1 (IO models and multiplexing)`
-9. Riftgate source-systems chapter `Ch3 (io_uring)`
-10. Riftgate source-systems chapter `Ch6 (DPDK and kernel bypass)`
+8. W. Richard Stevens and Stephen A. Rago, *Advanced Programming in the UNIX Environment* (3rd ed., 2013) — chapters on multiplexing primitives.
+9. Michael Kerrisk, *The Linux Programming Interface* (2010) — chapters 63-64 on alternative I/O models.
