@@ -1,7 +1,7 @@
 # 005. Allocator
 
 > **Status:** `recommended` — per-request `BumpArena` on the hot path with the system `malloc` as the global allocator default in `v0.1`; `mimalloc` becomes the opt-in global allocator in `v0.2`. See [ADR 0006](../06-adrs/0006-bump-arena-plus-system-malloc.md).
-> **Source-systems chapter:** `Ch14 (memory allocators)`
+> **Foundational topics:** memory allocators (`ptmalloc2`, `jemalloc`, `mimalloc`, `tcmalloc`), bump-pointer arena allocation, per-request lifetime memory contexts
 > **Related options:** [001](001-io-model.md) (IO model), [002](002-async-runtime.md) (async runtime), [003](003-concurrency-model.md) (concurrency model)
 > **Related ADR:** [ADR 0006](../06-adrs/0006-bump-arena-plus-system-malloc.md)
 
@@ -138,15 +138,15 @@ We evaluate five candidates for the combined allocation strategy. The first thre
 | Compatibility with `Allocator` trait | natural | natural | natural | natural | natural | Pluggability. |
 | Compatibility with future per-request tracing (alloc-tracking) | poor | poor | poor | very good (arena owns tracking) | very good | Useful for debugging weird requests. |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-`Ch14 (memory allocators)` is the single reference here, and it covers the design space from first principles. Three takeaways:
+**Bump-pointer arenas for known-scope workloads.** The bump-pointer arena is the simplest non-trivial allocator that exists, and the literature is unambiguous about its place: for request-scoped memory, an arena is unbeatable. Allocation is one pointer-add and an alignment mask. Free is one pointer-set. Postgres' per-query memory contexts and LLVM's per-pass arenas are the canonical production references. The directive is direct: if your workload has request-scoped memory, use an arena; do not use a general-purpose allocator and expect comparable performance.
 
-1. **The bump-pointer arena is the simplest non-trivial allocator that exists, and it is unbeatable for known-scope workloads.** Allocation is one pointer-add and an alignment mask. Free is one pointer-set. The chapter is direct: **if your workload has request-scoped memory, use an arena; do not use a general-purpose allocator and expect comparable performance.**
-2. **General-purpose `malloc` quality varies dramatically by implementation.** The chapter benchmarks ptmalloc2 (glibc), jemalloc, mimalloc, and tcmalloc on a synthetic threading workload. mimalloc and jemalloc cluster within 10% of each other; tcmalloc is competitive; ptmalloc2 lags meaningfully on highly threaded patterns. The chapter recommends jemalloc or mimalloc when concurrency matters; both are "fine" for less-demanding workloads.
-3. **The allocator is the single biggest source of "mysterious tail latency."** The chapter lists scenarios — large-arena rebalancing, cross-arena cache eviction, fragmentation collapse — that produce occasional millisecond-scale `malloc` calls even on healthy systems. **The defense is to remove `malloc` from the hot path.** Arenas are the answer.
+**General-purpose `malloc` quality varies dramatically by implementation.** Benchmarks of `ptmalloc2` (glibc), `jemalloc`, `mimalloc`, and `tcmalloc` on threaded workloads consistently cluster `mimalloc` and `jemalloc` within ~10% of each other; `tcmalloc` is competitive; `ptmalloc2` lags meaningfully on highly threaded allocation patterns. The Berger Hoard paper and the mimalloc *Free List Sharding* paper (both linked below) are the standard references. Either `jemalloc` or `mimalloc` is the right answer when concurrency matters; both are "fine" for less-demanding workloads.
 
-The chapter does not strongly discriminate between mimalloc and jemalloc; both are good. It notes that mimalloc is "newer, smaller, and currently has more momentum upstream."
+**Allocator-induced tail latency.** The allocator is the single biggest source of mysterious tail latency in well-engineered network servers — large-arena rebalancing, cross-arena cache eviction, fragmentation collapse, all of which produce occasional millisecond-scale `malloc` calls even on healthy systems. The defense is to remove `malloc` from the hot path; arenas are the answer.
+
+**`mimalloc` vs `jemalloc` in 2026.** Both are good. `mimalloc` is newer, smaller (~150 KB vs ~500 KB linked), and has more upstream momentum (active Microsoft Research development); `jemalloc`'s upstream was archived by Facebook in 2024 and the community fork is alive but slower-paced. We pick `mimalloc` for the opt-in global allocator on those grounds.
 
 ## 6. Recommendation
 
@@ -185,8 +185,10 @@ The reasoning, restated:
 1. Daan Leijen, Benjamin Zorn, Leonardo de Moura, *Mimalloc: Free List Sharding in Action* (APLAS 2019) — https://www.microsoft.com/en-us/research/publication/mimalloc-free-list-sharding-in-action/
 2. mimalloc on GitHub — https://github.com/microsoft/mimalloc
 3. jemalloc on GitHub (Facebook archive + community fork) — https://github.com/jemalloc/jemalloc
-4. Jason Evans, *A Scalable Concurrent malloc(3) Implementation for FreeBSD* (BSDCan 2006) — original jemalloc paper
-5. The bumpalo crate (Rust bump-allocator implementation) — https://docs.rs/bumpalo
-6. Postgres memory contexts overview — https://www.postgresql.org/docs/current/memorycontextswitch.html
-7. Apache Arrow memory pools — https://arrow.apache.org/docs/cpp/memory.html
-8. Riftgate source-systems chapter `Ch14 (memory allocators)`
+4. Jason Evans, *A Scalable Concurrent malloc(3) Implementation for FreeBSD* (BSDCan 2006) — original `jemalloc` paper.
+5. Emery D. Berger, Kathryn S. McKinley, Robert D. Blumofe, Paul R. Wilson, *Hoard: A Scalable Memory Allocator for Multithreaded Applications* (ASPLOS 2000).
+6. The bumpalo crate (Rust bump-allocator implementation) — https://docs.rs/bumpalo
+7. Postgres memory contexts overview — https://www.postgresql.org/docs/current/memorycontextswitch.html
+8. Apache Arrow memory pools — https://arrow.apache.org/docs/cpp/memory.html
+9. `tcmalloc` design notes (Google) — https://google.github.io/tcmalloc/design.html
+10. Andrei Alexandrescu, *Memory Allocation: Either Love It or Hate It* (CppCon 2015 talk) — talk page on cppcon.org.

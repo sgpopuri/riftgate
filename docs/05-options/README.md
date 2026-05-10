@@ -1,6 +1,6 @@
 # Options Docs Index
 
-Each Options doc explores a load-bearing design decision: candidates, tradeoffs, source-systems chapters consulted, and a recommendation. Decisions land in [`../06-adrs/`](../06-adrs/).
+Each Options doc explores a load-bearing design decision: candidates, tradeoffs, foundational principles, and a recommendation. Decisions land in [`../06-adrs/`](../06-adrs/).
 
 This is the moat. Read a few entries to get the project's flavor before contributing.
 
@@ -8,45 +8,45 @@ This is the moat. Read a few entries to get the project's flavor before contribu
 
 - Start with the `Recommendation` section if you only want the answer.
 - Read the full doc if you want to learn the decision space (Persona P3 — Maya — is the target reader).
-- Each Options doc cites the source-systems chapter(s) that informed it by plain-text title (e.g. `Ch3 (io_uring)`). The source-systems curriculum is not a public sibling repo; citations are by chapter title and number, not by hyperlink.
+- Each Options doc names the technology, pattern, or paper that informed it directly in the prose. The full external bibliography (RFCs, kernel docs, papers, source repos, books) lives in the doc's `## References` section.
 
 ## How to add a new one
 
 1. Copy [`_template.md`](_template.md) to `NNN-<slug>.md`. Use the next free number; numbering is permanent.
-2. Fill in. Be exhaustive. Cite real systems and real chapters.
+2. Fill in. Be exhaustive. Cite real systems, real papers, real RFCs.
 3. Open a PR with the new file and a stub ADR in `../06-adrs/` that the Options doc will eventually feed.
 4. Once the ADR is accepted, mark the Options doc `accepted` in its frontmatter and link to the ADR.
 
 ## Index
 
-| # | Title | Status | ADR | Source chapters |
-|---|-------|--------|-----|-----------------|
-| 001 | [IO model](001-io-model.md) | recommended | [0002](../06-adrs/0002-start-on-epoll.md) | Ch1, Ch3, Ch6 |
-| 002 | [async runtime](002-async-runtime.md) | recommended | [0003](../06-adrs/0003-tokio-multithread-default.md) | Ch2, Ch3, Ch7 |
-| 003 | [concurrency model](003-concurrency-model.md) | recommended | [0004](../06-adrs/0004-per-shard-default-stealing-opt-in.md) | Ch7, Ch12, Ch4 |
-| 004 | [request queue](004-request-queue.md) | recommended | [0005](../06-adrs/0005-sharded-mpmc-queue.md) | Ch4, Ch12 |
-| 005 | [allocator](005-allocator.md) | recommended | [0006](../06-adrs/0006-bump-arena-plus-system-malloc.md) | Ch14 |
-| 006 | timer subsystem | TBD | TBD | Ch15 |
-| 007 | [protocol parser](007-protocol-parser.md) | recommended | [0007](../06-adrs/0007-handrolled-fsm-parser.md) | Ch13 |
-| 008 | [stream framing](008-stream-framing.md) | recommended | [0008](../06-adrs/0008-sse-default-grpc-future.md) | Ch5, Ch13 |
-| 009 | request log | TBD | TBD | Ch9, Ch11 |
-| 010 | routing strategy | TBD | TBD | Ch12 + research |
-| 011 | circuit breaker | TBD | TBD | Ch12 |
-| 012 | backpressure policy | TBD | TBD | Ch8, Ch12 |
-| 013 | observability sink | TBD | TBD | Ch16 |
-| 014 | eBPF integration | TBD | TBD | Ch16 |
-| 015 | configuration model | TBD | TBD | Ch12 |
-| 016 | extension mechanism | TBD | TBD | Ch12 |
-| 017 | multitenancy | TBD | TBD | Ch12 |
-| 018 | deployment | TBD | TBD | Ch12 |
-| 019 | replay-eval | TBD | TBD | Ch10, Ch11 |
+| # | Title | Status | ADR | Foundational topics |
+|---|-------|--------|-----|---------------------|
+| 001 | [IO model](001-io-model.md) | recommended | [0002](../06-adrs/0002-start-on-epoll.md) | Unix I/O multiplexing (`epoll`/`kqueue`), `io_uring`, DPDK / kernel-bypass |
+| 002 | [async runtime](002-async-runtime.md) | recommended | [0003](../06-adrs/0003-tokio-multithread-default.md) | reactor pattern, `io_uring`, work-stealing schedulers |
+| 003 | [concurrency model](003-concurrency-model.md) | recommended | [0004](../06-adrs/0004-per-shard-default-stealing-opt-in.md) | work-stealing, shared-nothing per-shard isolation, lock-free structures |
+| 004 | [request queue](004-request-queue.md) | recommended | [0005](../06-adrs/0005-sharded-mpmc-queue.md) | lock-free structures, MPMC queues, sharded-queue patterns |
+| 005 | [allocator](005-allocator.md) | recommended | [0006](../06-adrs/0006-bump-arena-plus-system-malloc.md) | memory allocators (jemalloc / mimalloc / arenas) |
+| 006 | timer subsystem | TBD | TBD | hierarchical / hashed timer wheels |
+| 007 | [protocol parser](007-protocol-parser.md) | recommended | [0007](../06-adrs/0007-handrolled-fsm-parser.md) | FSM-based protocol parsing |
+| 008 | [stream framing](008-stream-framing.md) | recommended | [0008](../06-adrs/0008-sse-default-grpc-future.md) | ring buffers and zero-copy I/O, FSM-based parsing |
+| 009 | request log | TBD | TBD | LSM trees, write-ahead logging |
+| 010 | routing strategy | TBD | TBD | sidecar / ambassador patterns, KV-aware prefix routing |
+| 011 | circuit breaker | TBD | TBD | resilience patterns (Nygard *Release It*) |
+| 012 | backpressure policy | TBD | TBD | backpressure as policy, drop-on-full ring buffers |
+| 013 | observability sink | TBD | TBD | OTel exporters, eBPF |
+| 014 | eBPF integration | TBD | TBD | eBPF (Aya, libbpf, bpftrace) |
+| 015 | configuration model | TBD | TBD | configuration patterns (static TOML, hot-reload, CRD) |
+| 016 | extension mechanism | TBD | TBD | sandboxed extension surfaces (WASM via wasmtime) |
+| 017 | multitenancy | TBD | TBD | tenant-isolation patterns |
+| 018 | deployment | TBD | TBD | sidecar / ambassador deployment patterns |
+| 019 | replay-eval | TBD | TBD | streaming sketches, write-ahead logging |
 | 020 | language (Rust vs Zig) | TBD | [0001](../06-adrs/0001-rust-not-go-or-zig.md) | — |
-| 021 | [rate-limiting](021-rate-limiting.md) | recommended | [0009](../06-adrs/README.md) (reserved) | Ch12; `hashing/ch07` (future distributed); `trees/ch04` (priority under pressure) |
-| 022 | fairness-scheduling (optional; decide at `v0.2` retro) | TBD | TBD | Ch7; `trees/ch04_heaps_priority_queues.md` |
-| 026 | [mcp-orchestration](026-mcp-orchestration.md) | recommended | [0015](../06-adrs/README.md) (reserved) | Ch12; `advanced/ch08_design_data_structures.md`; `graphs/ch03_topological_sort_dags.md` |
-| 027 | upstream-protocols-http2-grpc (optional; deepens 008) | TBD | — | Ch13 |
+| 021 | [rate-limiting](021-rate-limiting.md) | recommended | [0009](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (proposed) | rate-limiting algorithms (token bucket, GCRA), consistent hashing (future distributed), priority heaps (priority under pressure), lock-free structures |
+| 022 | fairness-scheduling (optional; decide at `v0.2` retro) | TBD | TBD | work-stealing, priority heaps |
+| 026 | [mcp-orchestration](026-mcp-orchestration.md) | recommended | [0015](../06-adrs/0015-mcp-extension-plane-broker.md) (proposed) | ambassador pattern, capability-based security, allowlist data structures (tries, bit-sets), topological sort over DAGs, write-ahead logging for audit |
+| 027 | upstream-protocols-http2-grpc (optional; deepens 008) | TBD | — | FSM-based parsing |
 | 028 | token-accounting (optional; folds into filter starter library) | TBD | — | — |
-| 029 | async-telemetry-pipeline (optional; deepens 013) | TBD | — | Ch8, Ch10 |
+| 029 | async-telemetry-pipeline (optional; deepens 013) | TBD | — | pub/sub messaging, streaming sketches |
 
 This index is updated whenever a new Options doc lands or an existing one changes status. Stale entries are a documentation bug; please open a PR.
 

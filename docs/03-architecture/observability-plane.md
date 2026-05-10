@@ -19,7 +19,7 @@ The data plane publishes typed events to a **bounded MPSC channel**. Observabili
 - A `riftgate_observability_dropped_total` counter is incremented.
 - The drop is logged at `warn` level no more than once per minute.
 
-This is the `Ch8 (backpressure-as-policy)` pattern: explicit drop-on-full, count it, do not pretend it did not happen.
+This is the backpressure-as-policy pattern: explicit drop-on-full, count it, do not pretend it did not happen.
 
 ## Trace span structure
 

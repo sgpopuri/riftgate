@@ -18,7 +18,7 @@
 - Filter or routing-strategy choice. That is the [extension plane](extension-plane.md).
 - Metrics or trace emission. That is the [observability plane](observability-plane.md).
 
-The control plane only *configures* what the other three planes do. It must not become a place where logic accretes.
+The control plane only *configures* what the data, extension, and observability planes do. It must not become a place where logic accretes.
 
 ## Configuration model
 

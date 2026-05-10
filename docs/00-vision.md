@@ -28,18 +28,23 @@ flowchart LR
     D3 --> Riftgate
 ```
 
+
+
 ### 3.1. Programmable Rust core
+
 Every subsystem that matters — IO model, scheduler, allocator, parser, queue, timer subsystem, request log, routing strategy, observability sink, filter chain — is a Rust trait in `riftgate-core` with multiple implementations behind it. Switching impls is a config change or a `cargo` feature flag, not a fork. The default kernel is small enough to read end-to-end in a weekend.
 
 ### 3.2. Documentation-first build
+
 Every load-bearing decision ships as a pair:
 
-1. An **Options doc** in [`docs/05-options/`](05-options/) — exhaustive, citation-rich, tradeoff-explicit, written *before* the decision is made.
-2. An **ADR** in [`docs/06-adrs/`](06-adrs/) — short, decisive, Michael-Nygard format.
+1. An **Options doc** in `[docs/05-options/](05-options/)` — exhaustive, citation-rich, tradeoff-explicit, written *before* the decision is made.
+2. An **ADR** in `[docs/06-adrs/](06-adrs/)` — short, decisive, Michael-Nygard format.
 
 This is not paperwork. It is the **community-and-contributor moat**: people join, study, and extend projects whose internals they can actually read.
 
 ### 3.3. Integrated eBPF observability
+
 Riftgate embeds Aya-based BPF programs that:
 
 - Profile the gateway itself continuously (CPU on/off, syscall stalls, NUMA misses, page faults).
@@ -60,14 +65,14 @@ These are stated up front because honest scoping is itself part of the brand. *I
 - **Not a globally-coherent rate limiter.** The `RateLimiter` trait is designed to accept a distributed implementation later (Redis / Dragonfly / hash-sharded local+gossip), but `v1.0` ships only an in-proc token-bucket impl. Operators who need cross-replica coherence replicate-the-limit by `N_replicas` or place a proper rate-limit gateway in front.
 - **Not a reference semantic cache.** Transparent embedding-based response caching is a known extension point via the `Filter` trait; we do not ship a first-party vector-DB integration before `v1.0`. Users can author a WASM filter that hooks Qdrant / Pinecone / pgvector as they see fit.
 - **Not a distributed-state service.** Any shared state across Riftgate replicas (rate-limit counters, session affinity, semantic-cache state) is the operator's responsibility in `v1.0`. The gateway is designed to be horizontally replicable with independent per-instance state.
-- **Not yet production-ready.** Not even `v0.1`. Read [`02-mvp-roadmap.md`](02-mvp-roadmap.md) before deploying anything from this repo.
+- **Not yet production-ready.** Not even `v0.1`. Read `[02-mvp-roadmap.md](02-mvp-roadmap.md)` before deploying anything from this repo.
 - **Not a Python project, ever.** Rust + WASM is the bet. Python tooling for tests and benchmarks is fine; Python in the data path is not.
 
 ## 5. The bet
 
 Performance is table stakes. Pluggability, documentation, and integrated observability are the moats. We are not trying to win the gateway market in 18 months. We are trying to build the substrate that the next generation of AI-infrastructure engineers will read to learn how this layer is supposed to work — and the framework they will reach for when they need to extend it.
 
-If we are right, Riftgate becomes the project that grows because every contributor can find their way in. If we are wrong, we still have a deeply documented Rust codebase that demonstrates fluency with modern systems engineering at distinguished-engineer level — which is its own kind of success.
+If we are right, Riftgate becomes the project that grows because every contributor can find their way in. If we are wrong, we still have a deeply documented Rust codebase that demonstrates fluency with modern systems engineering which is its own kind of success.
 
 ## 6. Audience
 
@@ -86,17 +91,16 @@ We are explicitly *not* targeting application developers who want a SaaS multi-p
 - Every load-bearing change traces back to an ADR.
 - Benchmarks are reproducible from this repo or they are not benchmarks.
 - War stories in docs and posts are anonymized.
-- The [`AGENTS.md`](../AGENTS.md) context harness applies to every agent-assisted change.
+- The `[AGENTS.md](../AGENTS.md)` context harness applies to every agent-assisted change.
 
 ## 8. Known extension points / deferred hooks
 
 Riftgate's three pillars are bounded on purpose. The items below are *intentionally* outside the kernel but are named here so contributors and prospective users can see the edges clearly and know where the community can extend us.
 
 - **Semantic caching.** Embedding-based prompt similarity matched against a vector DB. Hook: the `Filter` trait. A reference WASM filter could use Qdrant or Pinecone; we will not maintain one before `v1.0`. The design surface is rich (Bloom filter pre-check to skip misses cheaply, LSH or cosine-similarity against an index, TTL and invalidation strategy) — all interesting, all deferred.
-- **Distributed rate limiter.** An impl of the `RateLimiter` trait backed by Redis (`INCR`+TTL, Lua for atomic GCRA), Dragonfly, or a gossip-based sharded counter. Designed-for, not-shipped. Options [`021-rate-limiting`](05-options/021-rate-limiting.md) catalogs the design space.
+- **Distributed rate limiter.** An impl of the `RateLimiter` trait backed by Redis (`INCR`+TTL, Lua for atomic GCRA), Dragonfly, or a gossip-based sharded counter. Designed-for, not-shipped. Options `[021-rate-limiting](05-options/021-rate-limiting.md)` catalogs the design space.
 - **Multi-provider WASM adapter starter library.** Community-maintained WASM filters that translate Anthropic / Google / Bedrock / Cohere payloads to/from the OpenAI-compatible kernel shape. A natural flagship example of the extension plane.
-- **Async telemetry pipeline.** Off-hot-path cost accounting and per-tenant billing ledger — Kafka / NATS / Redpanda → ClickHouse. Extends [Options `013`](05-options/013-observability-sink.md) rather than replacing it. Documented as a future impl of the `ObservabilitySink` trait.
-- **gRPC / HTTP/2 upstream streaming.** Current framing target is SSE over HTTP/1.1. gRPC-stream is captured in [Options `008`](05-options/008-stream-framing.md) and left as a `v1.0+` deepening.
+- **Async telemetry pipeline.** Off-hot-path cost accounting and per-tenant billing ledger — Kafka / NATS / Redpanda → ClickHouse. Extends [Options `013](05-options/013-observability-sink.md)` rather than replacing it. Documented as a future impl of the `ObservabilitySink` trait.
+- **gRPC / HTTP/2 upstream streaming.** Current framing target is SSE over HTTP/1.1. gRPC-stream is captured in [Options `008](05-options/008-stream-framing.md)` and left as a `v1.0+` deepening.
 
 These are not commitments. They are the honest edges of the kernel's responsibility, documented so that no one has to guess where we draw the line.
-

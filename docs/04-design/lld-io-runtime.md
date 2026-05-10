@@ -43,11 +43,11 @@ The IO subsystem sits between the kernel network stack and the rest of the data 
 - All IO is non-blocking. The trait is intentionally non-blocking-only.
 - Event-driven, not callback-based. Workers explicitly `poll()` for events.
 - Edge-triggered semantics where the underlying interface supports them (epoll ET, io_uring multishot). Workers must drain to `EAGAIN`.
-- Zero-copy where possible (sendfile, splice, MSG_ZEROCOPY, io_uring SEND_ZC). See `Ch5 (ring buffers and zero-copy)`.
+- Zero-copy where possible (`sendfile`, `splice`, `MSG_ZEROCOPY`, `io_uring` `SEND_ZC`). The kernel-bypass and zero-copy substrate is covered in [Options `008`](../05-options/008-stream-framing.md) §5; the canonical references are the `splice(2)` and `sendfile(2)` man pages and the LMAX Disruptor design notes.
 
 ### Pitfalls (will grow as we hit them)
 
-- **ET draining**: workers must read until `EAGAIN`. This is the most common bug class with ET epoll. See chapter 1 source material.
+- **ET draining**: workers must read until `EAGAIN`. This is the most common bug class with ET epoll, well-documented in `epoll(7)` and Stevens' *Advanced Programming in the UNIX Environment*.
 - **io_uring SQPOLL**: the kernel polling thread is hot CPU; only enable on dedicated boxes. Default is non-SQPOLL.
 - **Buffer ownership in MSG_ZEROCOPY**: the buffer is owned by the kernel until the completion arrives via the error queue. Re-using it earlier corrupts in flight.
 - **kqueue semantics differ from epoll** in subtle ways (one-shot vs persistent registration). Tests must cover both.

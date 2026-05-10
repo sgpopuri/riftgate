@@ -37,7 +37,7 @@ pub trait StreamParser: Send {
 
 Decision rationale: [Options 007 (protocol parser)](../05-options/007-protocol-parser.md), [Options 008 (stream framing)](../05-options/008-stream-framing.md).
 
-Source-systems chapter: `Ch13 (FSM and protocol parsing)`. The parser is intentionally a table-driven FSM rather than a hand-rolled `if`/`else` chain; the table is testable and the state space is enumerable.
+Foundational principle: table-driven FSM-based protocol parsing (Aho/Sethi/Ullman dragon book, ch. 3; the same shape used by `http_parser`, `picohttpparser`, and nginx's HTTP/1.1 codec). The parser is intentionally a table-driven FSM rather than a hand-rolled `if`/`else` chain; the table is testable and the state space is enumerable.
 
 ## Component context
 

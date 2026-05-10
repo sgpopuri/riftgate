@@ -28,7 +28,7 @@ pub trait Allocator: Send + Sync {
 
 Decision rationale: [Options 005 (allocator)](../05-options/005-allocator.md).
 
-Source-systems chapter: `Ch14 (memory allocators)`.
+Foundational principles: bump-pointer arena allocators (Postgres memory contexts, LLVM/rustc per-pass arenas) and modern multi-thread `malloc` implementations (`jemalloc`, `mimalloc`, `tcmalloc`; Berger Hoard paper for the underlying multithread-allocator design).
 
 ## Component context
 

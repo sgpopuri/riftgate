@@ -1,7 +1,7 @@
 # 004. Request Queue
 
 > **Status:** `recommended` — sharded MPMC queue strategy fixed by trait in `v0.1` (backed by `crossbeam-channel`); hand-rolled Vyukov MPMC and `loom`-verified sharded variant land in `v0.2` per [FR-106](../01-requirements/functional.md). See [ADR 0005](../06-adrs/0005-sharded-mpmc-queue.md).
-> **Source-systems chapters:** `Ch4 (lock-free MPMC for queue)`, `Ch12 (system design patterns)` (bulkhead / sharding)
+> **Foundational topics:** lock-free MPMC queues (Vyukov bounded), bulkhead pattern / per-shard isolation, queue-as-circuit-breaker
 > **Related options:** [001](001-io-model.md) (IO model), [002](002-async-runtime.md) (async runtime), [003](003-concurrency-model.md) (concurrency model)
 > **Related ADR:** [ADR 0005](../06-adrs/0005-sharded-mpmc-queue.md)
 
@@ -139,17 +139,17 @@ impl<T> MpmcQueue<T> {
 | Compatibility with future priority tiers ([Options 022](README.md), if pursued) | poor | hard | hard | natural (per-tier shards) | Gated, but door must stay open. |
 | Engineering cost in `v0.1` | trivial | low (use `crossbeam-channel`) | medium | low (use `crossbeam-channel` per shard) | We have one maintainer. |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-`Ch4 (lock-free MPMC for queue)` covers the design space exhaustively. Three takeaways:
+**Lock-free MPMC queues (Vyukov bounded).** Three takeaways from the lock-free-queue literature shape the choice:
 
-1. **Vyukov is the canonical bounded MPMC.** The chapter walks through the per-slot sequence-number protocol and the proof of FIFO + lock-freedom. The implementation in `crossbeam-queue` is faithful to this. Riftgate will follow the same design when we hand-roll in `v0.2`.
-2. **Cache-line padding is mandatory.** The chapter is explicit: producer-side and consumer-side counters must live on different cache lines, or false sharing degrades the queue back toward mutex-level performance. `#[repr(align(64))]` on the relevant atomics is non-negotiable.
-3. **Bounded vs unbounded is a backpressure decision, not a memory decision.** Unbounded queues mean your system kernel decides when to OOM. Bounded queues mean your application decides when to shed load. Riftgate is in the second camp on principle.
+1. **Vyukov bounded MPMC is the canonical design.** The per-slot sequence-number protocol and the FIFO + lock-freedom proof are well-documented in Vyukov's 1024cores writeup. The implementation in `crossbeam-queue` is faithful to this; Riftgate will follow the same design when we hand-roll in `v0.2`.
+2. **Cache-line padding is mandatory.** Producer-side and consumer-side counters must live on different cache lines, or false sharing degrades the queue back toward mutex-level performance. `#[repr(align(64))]` (or `crossbeam_utils::CachePadded`) on the relevant atomics is non-negotiable. McKenney's *Is Parallel Programming Hard?* is the standard reference for the underlying microarchitecture.
+3. **Bounded vs unbounded is a backpressure decision, not a memory decision.** Unbounded queues mean your kernel decides when to OOM; bounded queues mean your application decides when to shed load. Riftgate is in the second camp on principle.
 
-`Ch12 (system design patterns)` covers the bulkhead pattern at the system level. The relevant insight: **the unit of failure isolation should be the same as the unit of resource allocation.** For Riftgate, that unit is the worker shard. Each shard owning its own queue means queue-fullness fails closed *for that shard only*; other shards keep serving. A single shared queue makes the entire data plane the failure unit.
+**Bulkhead pattern and per-shard isolation.** Nygard's *Release It* and the broader resilience-patterns literature offer one prescriptive insight: the unit of failure isolation should be the same as the unit of resource allocation. For Riftgate, that unit is the worker shard. Each shard owning its own queue means queue-fullness fails closed for that shard only; other shards keep serving. A single shared queue makes the entire data plane the failure unit.
 
-The chapter also references the "queue-as-circuit-breaker" idea: a full queue is itself a backpressure signal. The application can choose to return 503, to delay, or to spill to a degraded path; the queue does not need to be smart, but it needs to be observable. Sharded queues give us per-shard observability for free.
+**Queue-as-circuit-breaker.** A full queue is itself a backpressure signal. The application can choose to return 503, to delay, or to spill to a degraded path; the queue does not need to be smart, but it needs to be observable. Sharded queues give us per-shard observability for free.
 
 ## 6. Recommendation
 
@@ -159,7 +159,7 @@ The reasoning, restated:
 
 - The architectural answer is sharded MPMC. The implementation answer for `v0.1` is "use a battle-tested crate"; we will hand-roll for `v0.2` to own instrumentation hooks (per-slot seq inspection, custom metrics) and to control memory-ordering choices.
 - `crossbeam-channel::bounded` is essentially Vyukov MPMC with sender/receiver wrappers and `Condvar`-style blocking semantics. It is mature, fast, well-tested, and meets the trait shape.
-- The hand-roll in `v0.2` is justified by `Ch4`'s "we own the substrate" posture: hand-rolled MPMC is a textbook teaching artifact for the project, fits the documentation-first pillar, and lets us add features (e.g. per-slot metrics) without forking `crossbeam-channel`.
+- The hand-roll in `v0.2` is justified by the project's "we own the substrate" posture: hand-rolled MPMC is a textbook teaching artifact, fits the documentation-first pillar, and lets us add features (e.g. per-slot metrics) without forking `crossbeam-channel`.
 - The trait shape is the only abstraction that crosses crate boundaries. Whether `v0.1` uses `crossbeam-channel` or `v0.2` uses our own MPMC, consumers of `riftgate-core::Queue<T>` see no difference.
 
 ### Conditions under which we'd revisit
@@ -183,12 +183,13 @@ The reasoning, restated:
 
 ## 8. References
 
-1. Dmitry Vyukov, *Bounded MPMC queue* — http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue
+1. Dmitry Vyukov, *Bounded MPMC queue* — https://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue
 2. crossbeam-channel — https://docs.rs/crossbeam-channel
 3. crossbeam-queue (`ArrayQueue`) — https://docs.rs/crossbeam-queue
 4. LMAX Disruptor — https://lmax-exchange.github.io/disruptor/
 5. Folly MPMCQueue (Facebook) — https://github.com/facebook/folly/blob/main/folly/MPMCQueue.h
-6. Maged M. Michael, *Hazard Pointers: Safe Memory Reclamation for Lock-Free Objects* (IEEE TPDS 2004) — https://www.cs.utah.edu/~regehr/papers/lock_free.pdf
-7. The `loom` crate (concurrency permutation tester) — https://docs.rs/loom
-8. Riftgate source-systems chapter `Ch4 (lock-free MPMC for queue)`
-9. Riftgate source-systems chapter `Ch12 (system design patterns)`
+6. Maged M. Michael and Michael L. Scott, *Simple, Fast, and Practical Non-Blocking and Blocking Concurrent Queue Algorithms* (PODC 1996).
+7. Maged M. Michael, *Hazard Pointers: Safe Memory Reclamation for Lock-Free Objects* (IEEE TPDS 2004).
+8. The `loom` crate (concurrency permutation tester) — https://docs.rs/loom
+9. Paul E. McKenney, *Is Parallel Programming Hard, And, If So, What Can You Do About It?* — https://mirrors.edge.kernel.org/pub/linux/kernel/people/paulmck/perfbook/perfbook.html
+10. Michael Nygard, *Release It! Design and Deploy Production-Ready Software* (2nd ed., 2018) — bulkhead pattern.

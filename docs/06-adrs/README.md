@@ -29,10 +29,10 @@ Each ADR captures a decision: context, decision, consequences. Format is Michael
 | 0006 | [Per-request bump arena on the hot path; system malloc globally in v0.1; mimalloc opt-in in v0.2](0006-bump-arena-plus-system-malloc.md) | accepted | 2026-05-03 | [005-allocator](../05-options/005-allocator.md) |
 | 0007 | [Hand-rolled table-driven FSM in riftgate-parser; httparse for headers in v0.1; full FSM in v0.2](0007-handrolled-fsm-parser.md) | accepted | 2026-05-03 | [007-protocol-parser](../05-options/007-protocol-parser.md) |
 | 0008 | [SSE as the only v0.1 streaming framing; NDJSON optional in v0.2+; gRPC bidi deferred to v1.0+](0008-sse-default-grpc-future.md) | accepted | 2026-05-03 | [008-stream-framing](../05-options/008-stream-framing.md) |
-| 0009 | Rate limiter trait + in-proc token-bucket only in `v1.0` | reserved (proposed) | TBD | [021-rate-limiting](../05-options/021-rate-limiting.md) |
-| 0015 | MCP as a first-class citizen of the extension plane (gateway-as-broker) | reserved (proposed) | TBD | [026-mcp-orchestration](../05-options/026-mcp-orchestration.md) |
+| 0009 | [Rate limiter trait + in-proc token-bucket only in v0.2; distributed impls deferred](0009-rate-limiter-trait-in-proc-only.md) | proposed | TBD (target: open of `v0.2`) | [021-rate-limiting](../05-options/021-rate-limiting.md) |
+| 0015 | [MCP as a first-class citizen of the extension plane (gateway-as-broker)](0015-mcp-extension-plane-broker.md) | proposed | TBD (target: open of `v0.5`) | [026-mcp-orchestration](../05-options/026-mcp-orchestration.md) |
 
-Number `0010`–`0014` and `0016`–`0020` are reserved in order for the remaining Options docs and will be written as each decision lands. Reservations for `0009` and `0015` are called out above because their Options docs are authored (see the index) even though their implementation ships later.
+Numbers `0010`–`0014` and `0016`–`0020` are reserved in order for the remaining Options docs and will be written as each decision lands. ADRs `0009` and `0015` are listed above as `proposed` because their Options docs are already authored and their decisions are already framed; both will move to `accepted` at the open of the milestones that ship their respective implementations (`v0.2` for `0009`, `v0.5` for `0015`).
 
 ## Status legend
 

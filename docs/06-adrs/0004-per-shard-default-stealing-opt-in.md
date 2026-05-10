@@ -52,6 +52,6 @@ This decision is layered on top of [ADR 0003](0003-tokio-multithread-default.md)
 
 ## Notes
 
-- The decision to ship per-shard before work-stealing is in line with `Ch12 (system design patterns)`'s general advice: start with shared-nothing, add coupling only when measurements demand it.
+- The decision to ship per-shard before work-stealing is in line with the systems-design literature on bulkhead isolation (Nygard, *Release It*) and shared-nothing architecture (ScyllaDB / Seastar): start with shared-nothing, add coupling only when measurements demand it.
 - Many readers may expect Riftgate to ship work-stealing first because Tokio (and Go, Rayon, Cilk, TBB) all default to it. The distinction is that those are *task* schedulers — sub-millisecond units. Riftgate's `Scheduler` is a *request* scheduler — hundreds of microseconds per unit, with a heavier per-unit working set. The cost model is different.
 - The naming — `PerShardScheduler` here vs `PerCoreScheduler` in earlier LLD drafts ([`docs/04-design/lld-scheduling.md`](../04-design/lld-scheduling.md)) — is deliberate. "Per-core" implies hardware affinity, which is a `v0.2`+ deployment-shape decision. "Per-shard" is the `v0.1` reality: M logical shards on N Tokio threads, no pinning required.

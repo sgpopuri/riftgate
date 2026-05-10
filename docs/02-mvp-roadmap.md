@@ -1,6 +1,6 @@
 # 02. MVP-to-v1.0 Roadmap
 
-> Five milestones, no calendar deadlines. Each milestone names the chapters of the source-systems curriculum it draws from, the specific Options docs and ADRs it depends on, and what "done" looks like.
+> Five milestones, no calendar deadlines. Each milestone names the foundational systems principles it draws from, the specific Options docs and ADRs it depends on, and what "done" looks like.
 >
 > **Pacing philosophy:** milestones complete when they're done, not when a calendar says so. If the options docs, posts, and code flow quickly, milestones complete sooner. If life intervenes, they take longer. Rough estimate: ~12 months total at evenings-and-weekends pace with AI-assisted acceleration, but the milestone sequence is the commitment, not the timeline.
 
@@ -9,7 +9,7 @@
 > _**Project context (read every session):**_
 >
 > - **Active milestone:** `v0.1` — walking skeleton (first Rust binary). Awaiting kickoff; no Rust code yet.
-> - **Recently shipped (`v0.0` close-out, 2026-05-03):** Options docs `001`-`005`, `007`, `008` accepted; ADRs `0001`-`0008` accepted. Vision, requirements, HLD, all four plane narratives, ten LLD skeletons, glossary, and the two research-pass docs (Options `021` rate-limiting + LLD; Options `026` MCP orchestration + LLD; ADRs `0009` and `0015` reserved-proposed for `v0.2` and `v0.5` implementations). Repo published at https://github.com/sgpopuri/riftgate; `v0.0` tagged.
+> - **Recently shipped (`v0.0` close-out, 2026-05-03):** Options docs `001`-`005`, `007`, `008` accepted; ADRs `0001`-`0008` accepted. Vision, requirements, HLD, all four plane narratives, ten LLD skeletons, glossary, the two research-pass docs (Options `021` rate-limiting + LLD; Options `026` MCP orchestration + LLD; ADRs `0009` and `0015` carry `proposed` status pending the open of `v0.2` and `v0.5` respectively), and the [`v0.0` retrospective](02a-v0.0-retrospective.md). Repo published at https://github.com/sgpopuri/riftgate; `v0.0` tagged.
 > - **In flight:** _(none yet; `v0.1` starts with three remaining prerequisite Options docs — `006-timer-subsystem`, `013-observability-sink`, `015-config-model` — and the first `crates/riftgate-core` trait surface scaffolding derived from the LLDs)_
 > - **Open questions:**
 >   - Domain availability check for `riftgate.io` / `riftgate.dev` / `riftgate.com` — still not done. Recommended pre-`v0.1`-publication decision item; the project ships fine without a custom domain, but if one is intended it should be reserved before broader announcement.
@@ -32,21 +32,25 @@
 - [`docs/00-vision.md`](00-vision.md) — north star, non-goals, differentiation
 - [`docs/01-requirements/`](01-requirements/) — functional, non-functional, personas
 - [`docs/02-mvp-roadmap.md`](02-mvp-roadmap.md) (this file)
-- [`docs/03-architecture/hld.md`](03-architecture/hld.md) — high-level design with three planes
-- [`docs/03-architecture/{data,control,extension,observability}-plane.md`](03-architecture/) — plane-level narratives
-- [`docs/04-design/lld-*.md`](04-design/) — 8 LLD skeletons
-- [`docs/05-options/`](05-options/) — first 5-7 Options docs:
+- [`docs/02a-v0.0-retrospective.md`](02a-v0.0-retrospective.md) — one-time milestone retrospective anchored to the `v0.0` tag
+- [`docs/03-architecture/hld.md`](03-architecture/hld.md) — high-level design across the four planes
+- [`docs/03-architecture/{data,control,extension,observability}-plane.md`](03-architecture/) — plane-level narratives (data, control, extension, observability)
+- [`docs/04-design/lld-*.md`](04-design/) — 10 LLD skeletons (eight core: io-runtime, scheduling, parsing, storage, allocator, timers, routing, observability; plus the two from the 2026-05 research pass: `lld-rate-limiter`, `lld-mcp-capability`)
+- [`docs/05-options/`](05-options/) — nine Options docs:
   - `001-io-model.md` (epoll vs kqueue vs io_uring vs DPDK vs AF_XDP)
   - `002-async-runtime.md` (tokio vs glommio vs monoio vs custom)
-  - `003-concurrency-model.md` (shared vs per-core vs work-stealing)
+  - `003-concurrency-model.md` (shared vs per-shard vs work-stealing)
   - `004-request-queue.md` (mutex vs MPMC vs SPSC vs sharded)
   - `005-allocator.md` (system vs jemalloc vs mimalloc vs arena)
   - `007-protocol-parser.md` (hyper vs combinators vs hand-rolled FSM)
   - `008-stream-framing.md` (SSE vs NDJSON vs gRPC-stream)
-- [`docs/06-adrs/`](06-adrs/) — first 5-7 ADRs accepting the above options
+  - `021-rate-limiting.md` (research-pass: fixed-window vs sliding-window vs token bucket vs leaky bucket vs GCRA vs distributed variants)
+  - `026-mcp-orchestration.md` (research-pass: passthrough vs inspector vs broker vs mediator)
+- [`docs/06-adrs/`](06-adrs/) — eight accepted ADRs (`0001`–`0008`) plus two ADRs in `proposed` status (`0009` rate-limiter trait + in-proc-only impl, targeting the open of `v0.2`; `0015` MCP-as-extension-plane-broker, targeting the open of `v0.5`)
+- [`docs/08-glossary.md`](08-glossary.md) — public glossary of Riftgate terms
 
-### Source chapters drawn from
-Ch1 (IO models & multiplexing), Ch2 (event loops & reactor), Ch3 (io_uring), Ch6 (DPDK), Ch7 (work stealing), Ch12 (system design patterns), Ch13 (FSM-based parsing), Ch14 (allocators), Ch15 (timer wheels)
+### Foundational principles drawn from
+Unix I/O multiplexing (`epoll`/`kqueue`/IOCP), reactor pattern and event loops, `io_uring` (shared SQ/CQ rings, batched submission), DPDK / kernel-bypass networking, work-stealing schedulers, system-design patterns (bulkhead, sidecar/ambassador, circuit breaker), FSM-based protocol parsing, memory allocators (`jemalloc`/`mimalloc`/arenas), hierarchical / hashed timing wheels.
 
 ### Goal metric
 Prove the documentation-first methodology works publicly. **One GitHub watcher = success at this stage.** A senior systems engineer cites an Options doc on social media = early success.
@@ -57,8 +61,8 @@ Prove the documentation-first methodology works publicly. **One GitHub watcher =
 
 A single Rust binary that proxies real OpenAI-format traffic to one backend with SSE streaming. The minimum useful gateway.
 
-### Source-systems chapters
-- Ch1 (epoll basics), Ch2 (reactor), Ch4 (lock-free MPMC for queue), Ch5 (ring buffers for SSE), Ch13 (FSM parser), Ch14 (per-request arena), Ch15 (timer wheel for deadlines)
+### Foundational principles
+- Unix I/O multiplexing (`epoll` basics), reactor pattern, lock-free MPMC queues for the request queue, ring buffers for SSE response framing, FSM-based protocol parsing, per-request bump-arena allocation, hashed timer wheels for per-request deadlines.
 
 ### Functional requirements covered
 FR-001 through FR-008 (see [`01-requirements/functional.md`](01-requirements/functional.md))
@@ -86,8 +90,8 @@ Someone outside the project can `cargo install riftgate` (or build from source) 
 
 Honest performance on Linux, multi-backend routing, durable request log, circuit breakers, work-stealing scheduler.
 
-### Source-systems chapters
-- Ch3 (io_uring), Ch4 (lock-free MPMC), Ch7 (work-stealing), Ch8 (backpressure as policy), Ch9 (LSM concepts for the request log), Ch11 (WAL semantics), Ch12 (circuit breaker)
+### Foundational principles
+- `io_uring` (shared-memory ring submission), lock-free MPMC queues, work-stealing schedulers (Cilk-5 / Chase-Lev), backpressure as policy, LSM-tree concepts for the request log, write-ahead-logging semantics (ARIES), circuit-breaker resilience pattern (Nygard, *Release It*).
 
 ### Functional requirements covered
 FR-101 through FR-108
@@ -123,8 +127,8 @@ Riftgate `v0.2` vs LiteLLM (we expect a clear win), vs a published TensorZero cl
 
 WASM filter chain, plugin-based routing strategies, hedged requests with stream cancellation.
 
-### Source-systems chapters
-- Ch12 (extension models, sidecar/ambassador patterns), Ch13 (per-stream FSM for cancellation)
+### Foundational principles
+- Extension models and sidecar/ambassador deployment patterns (Microsoft *Cloud Design Patterns*, Hohpe *Enterprise Integration Patterns*); per-stream FSM-based cancellation (table-driven state machines that handle the cancel transition cleanly).
 
 ### Functional requirements covered
 FR-201 through FR-205, and (gated on `v0.2` retro) FR-206
@@ -134,7 +138,7 @@ FR-201 through FR-205, and (gated on `v0.2` retro) FR-206
 - Starter filter library: PII redactor, prompt template substitution, output schema validator, cost guard, token-budget guard
 - Routing strategies as plugins: KV-cache-aware (integrating with `vllm-router`'s LMCache or a built-in prefix trie), hedged requests
 - Stream cancellation primitives in `riftgate-core`
-- (Optional, gated on `v0.2` retro) Priority-aware scheduling in the request queue, citing `trees/ch04_heaps_priority_queues.md`
+- (Optional, gated on `v0.2` retro) Priority-aware scheduling in the request queue, built on a binary or d-ary heap (CLRS ch. 6).
 
 ### Options docs and ADRs added
 - `010-routing-strategy.md` extended (KV-aware, hedged) + new ADRs
@@ -150,8 +154,8 @@ FR-201 through FR-205, and (gated on `v0.2` retro) FR-206
 
 Gateway-internal continuous profiling and backend GPU pressure observability via Aya-based BPF programs.
 
-### Source-systems chapters
-- Ch16 (eBPF), Ch10 (sketches for token-level metrics)
+### Foundational principles
+- eBPF (verifier, JIT, maps, kprobes / tracepoints / XDP / TC / LSM); streaming sketches for token-level metrics (Count–Min Sketch, HyperLogLog, reservoir sampling).
 
 ### Functional requirements covered
 FR-301, FR-302, FR-303
@@ -177,11 +181,11 @@ First-class [Model Context Protocol](https://modelcontextprotocol.io/) support. 
 
 The agentic-era posture: the gateway is no longer just a byte proxy. It is the capability ledger — who-called-what-on-whose-behalf, durably recorded, queryable after the fact.
 
-### Source-systems chapters
-- Ch12 (ambassador pattern, capability-based security; resilience patterns)
-- Ch11 (WAL semantics reused for the capability audit log)
-- `advanced/ch08_design_data_structures.md` (allowlist data structures: prefix trie, interval tree for time-bounded grants, bit-set allowlists)
-- `graphs/ch03_topological_sort_dags.md` (optional; if tool-dependency graphs become relevant, e.g. "tool A must run before tool B")
+### Foundational principles
+- Ambassador pattern and capability-based security (KeyKOS / EROS / seL4 lineage; Mark Miller, *Robust Composition*); resilience patterns (Nygard, *Release It*).
+- Write-ahead-logging semantics (ARIES) reused for the capability audit log.
+- Allowlist data structures: prefix trie / radix tree (Knuth TAOCP §6.3), interval tree for time-bounded grants (CLRS ch. 14), bit-set allowlists.
+- Topological sort over DAGs (Kahn 1962; CLRS ch. 22) — optional, if tool-dependency graphs become relevant (for example "tool A must run before tool B").
 
 ### Functional requirements covered
 FR-501 through FR-504
@@ -208,8 +212,8 @@ The 2026 research pass confirmed that Anthropic's MCP and the broader tool-use s
 
 K8s operator, CRDs, sidecar deployment, comprehensive test suite, replay framework.
 
-### Source-systems chapters
-All 16 are now visible somewhere in the codebase or docs.
+### Foundational principles
+At `v1.0` every foundational principle introduced in earlier milestones — Unix I/O multiplexing, `io_uring`, reactor and work-stealing schedulers, lock-free MPMC queues, ring-buffer / zero-copy I/O paths, FSM-based parsing, per-request arena allocation, hierarchical timer wheels, write-ahead logging, LSM-tree storage concepts, system-design and resilience patterns, eBPF observability, capability-based security — is visible somewhere in the codebase or docs.
 
 ### Functional requirements covered
 FR-401 through FR-405; all cross-cutting requirements (FR-X01 through FR-X05) are at green.

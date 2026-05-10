@@ -88,7 +88,7 @@ The routing subsystem is a meeting point for several classical data structures. 
 
 ### Prefix trie / radix tree
 
-Reference: `trees/ch05 (tries and string trees)`.
+Reference: tries and radix / patricia trees (Knuth TAOCP §6.3; the standard data-structures literature).
 
 Two places a trie pays off inside routing:
 
@@ -99,7 +99,7 @@ Both uses avoid per-request allocations by sharing the tree across requests (imm
 
 ### Consistent hashing
 
-Reference: `hashing/ch07 (consistent hashing)`.
+Reference: consistent hashing (Karger et al., 1997; Lamping–Veach jump-consistent, 2014; Maglev hashing, 2016; Mirrokni et al., bounded-load consistent hashing, 2016).
 
 Consistent hashing appears twice in the routing surface:
 
@@ -108,7 +108,7 @@ Consistent hashing appears twice in the routing surface:
 
 ### Priority queue / heap
 
-Reference: `trees/ch04 (heaps and priority queues)`.
+Reference: binary and d-ary heaps, priority queues (CLRS ch. 6).
 
 When hedging a request, the router returns a `Vec<BackendId>`. At scheduling time, a heap ordered by (`expected_latency`, `cost`) picks the next candidate to dispatch on. This is an anticipated use once hedging matures — it is not in the initial `HedgedRouter` impl.
 

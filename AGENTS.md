@@ -48,6 +48,8 @@ The durable, theory-of-the-system knowledge for each subsystem lives next to the
 | Timers | [`docs/04-design/lld-timers.md`](docs/04-design/lld-timers.md) | `crates/riftgate-core` |
 | Routing | [`docs/04-design/lld-routing.md`](docs/04-design/lld-routing.md) | `crates/riftgate-router` |
 | Observability | [`docs/04-design/lld-observability.md`](docs/04-design/lld-observability.md) | `crates/riftgate-obs` |
+| Rate limiting | [`docs/04-design/lld-rate-limiter.md`](docs/04-design/lld-rate-limiter.md) | `crates/riftgate-core` (trait + default in-proc token-bucket impl through `v0.2`; a separate `crates/riftgate-rate-limit-*` crate emerges only if a distributed impl lands later, per [Options `021`](docs/05-options/021-rate-limiting.md)) |
+| MCP capability broker | [`docs/04-design/lld-mcp-capability.md`](docs/04-design/lld-mcp-capability.md) | `crates/riftgate-mcp` (per [Options `026`](docs/05-options/026-mcp-orchestration.md)) |
 
 Each LLD is the operating theory of one subsystem: architecture, dependencies, patterns, pitfalls, quality contract, agent guidance. Load the one(s) you'll touch. Do not infer them from nearby code.
 
@@ -189,6 +191,6 @@ There is exactly one live status surface in this repo: the **"Currently shipping
 - When an ADR is superseded, a new ADR is written — the old one is never edited in place.
 - Tagged commits anchor decisions: `v0.N-decision-NNN-<slug>`.
 
-### The source-systems references
+### Citations and external references
 
-Options docs and LLDs cite chapter-level references to a private source-systems curriculum (chapters on IO models, io_uring, ring buffers and zero-copy, work-stealing, FSM-based parsing, allocators, timer wheels, eBPF, etc.). Citations appear as plain-text chapter titles only — there is no public sibling repo to link to. If you propose to deepen the rationale of an Options doc, attribute the chapter by title and number; do not invent a hyperlink.
+Options docs and LLDs cite the underlying technology, pattern, paper, or named system that informs each decision — `io_uring`'s submission/completion ring model, work-stealing schedulers, write-ahead logging à la ARIES, and so on. Every Options doc carries a `## References` section that lists concrete external sources: RFCs, kernel documentation, papers, source repositories, well-known projects, books. The standard is that [Persona P3 (Maya, the systems-engineering learner)](docs/01-requirements/personas.md) can follow every citation without access to any private material. If you propose to deepen the rationale of an Options doc, name the technique and add the corresponding paper, RFC, or kernel-docs link to the References section.

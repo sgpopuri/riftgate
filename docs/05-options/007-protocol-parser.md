@@ -1,7 +1,7 @@
 # 007. Protocol Parser
 
 > **Status:** `recommended` — table-driven hand-rolled FSM in `riftgate-parser`, leveraging `httparse` as the v0.1 zero-copy header tokenizer; full hand-rolled FSM (header tokenizer included) is a v0.2 hardening goal. See [ADR 0007](../06-adrs/0007-handrolled-fsm-parser.md).
-> **Source-systems chapter:** `Ch13 (FSM and protocol parsing)`
+> **Foundational topics:** finite-state-machine protocol parsing, table-driven lexers and grammars, streaming (non-backtracking) parser discipline
 > **Related options:** [001](001-io-model.md) (IO model), [002](002-async-runtime.md) (async runtime), [005](005-allocator.md) (allocator), [008](008-stream-framing.md) (stream framing)
 > **Related ADR:** [ADR 0007](../06-adrs/0007-handrolled-fsm-parser.md)
 
@@ -144,17 +144,17 @@ Forces driving this decision:
 | Compatibility with `Tower`/`Axum` middleware ecosystem | natural | adapters required | adapters required | adapters required | adapters required | We've already chosen pluggability over ecosystem integration. |
 | Fuzz surface | covered (years) | partly covered (`httparse` upstream) | depends on us | depends on us | depends on grammar | [FR-404](../01-requirements/functional.md). |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-`Ch13 (FSM and protocol parsing)` is the primary reference. The chapter's argument is direct: **for protocols whose grammar is finite and well-known, a hand-written or generated FSM is the right substrate — combinators trade away too much of the cost model for too little gain.**
+The protocol-parsing literature — the dragon book (Aho/Sethi/Ullman), Ragel's manual, and the design notes for `http_parser` (Node.js) and `picohttpparser` — is direct: for protocols whose grammar is finite and well-known, a hand-written or generated FSM is the right substrate; combinators trade away too much of the cost model for too little gain.
 
-Three takeaways stand out for our decision:
+Three takeaways:
 
 1. **The FSM is the smallest abstraction that captures protocol semantics.** Combinators add an interpreter layer (one indirection per combinator); generators add a code-generation layer (one indirection per regeneration). A direct FSM is the substrate; everything else is an abstraction over it.
-2. **Streaming parsers must never backtrack.** The chapter is explicit: "a parser that can roll back has bytes on the wire it cannot un-read." Combinators that support backtracking are dangerous; FSMs that always advance are safe. SSE response framing (where every byte that arrived is already in the client's buffer) makes this absolute.
-3. **Table-driven beats hand-rolled if-else for HTTP/1.1.** The chapter benchmarks an HTTP/1.1 method-and-path parser as 1) hand-rolled if-else and 2) table-driven. The table-driven version is ~2× faster in the chapter's measurements, mostly because the if-else version branches unpredictably and the table-driven version is one indirect load per byte.
+2. **Streaming parsers must never backtrack.** A parser that can roll back has bytes on the wire it cannot un-read. Combinators that support backtracking are dangerous; FSMs that always advance are safe. SSE response framing (where every byte that arrived is already in the client's buffer) makes this absolute.
+3. **Table-driven beats hand-rolled if-else for HTTP/1.1.** Benchmarks of HTTP/1.1 method-and-path parsing consistently show table-driven implementations at roughly 2× the throughput of equivalent if-else trees: the if-else version branches unpredictably, the table-driven version is one indirect load per byte. This is the basic case made by Aho/Sethi/Ullman for lexer construction and reproduced by every serious protocol-parsing project since.
 
-The chapter does not strongly recommend "hand-roll the header tokenizer" — it acknowledges that header parsing is fiddly and that mature substrates (`http_parser` in C, `httparse` in Rust) capture years of edge-case fixes. The chapter's stance is closer to "build the parts that matter for your project; reuse the parts that are commodity." For Riftgate, the body framing and the SSE event framing are where we add value; the header tokenizer is commodity.
+A pragmatic caveat from the same literature: header parsing in HTTP/1.1 is fiddly, and mature substrates (`http_parser` in C, `httparse` in Rust) capture years of edge-case fixes. The pragmatic stance is "build the parts that matter for your project; reuse the parts that are commodity." For Riftgate, the body framing and the SSE event framing are where we add value; the header tokenizer is commodity.
 
 ## 6. Recommendation
 
@@ -190,9 +190,10 @@ The reasoning, restated:
 1. `httparse` crate — https://docs.rs/httparse
 2. `hyper` project — https://hyper.rs/
 3. `nom` crate — https://docs.rs/nom
-4. Ryan Dahl, *On the design of a streaming HTTP/1.1 parser* (Node.js `http_parser` heritage) — https://github.com/nodejs/http-parser
-5. nginx HTTP/1.1 parser source (table-driven C) — https://github.com/nginx/nginx/tree/master/src/http
-6. Cloudflare, *Pingora's custom HTTP parser story* (selected blog posts) — https://blog.cloudflare.com/
-7. Ragel state machine generator — https://www.colm.net/open-source/ragel/
-8. The `logos` lexer-generator crate — https://docs.rs/logos
-9. Riftgate source-systems chapter `Ch13 (FSM and protocol parsing)`
+4. `http_parser` (Node.js heritage) — https://github.com/nodejs/http-parser
+5. `picohttpparser` (h2o.examp1e.net) — https://github.com/h2o/picohttpparser
+6. nginx HTTP/1.1 parser source (table-driven C) — https://github.com/nginx/nginx/tree/master/src/http
+7. Cloudflare, *Pingora's custom HTTP parser story* (selected blog posts) — https://blog.cloudflare.com/
+8. Ragel state machine generator — https://www.colm.net/open-source/ragel/
+9. The `logos` lexer-generator crate — https://docs.rs/logos
+10. Alfred V. Aho, Ravi Sethi, Jeffrey D. Ullman, *Compilers: Principles, Techniques, and Tools* (the "dragon book", 2nd ed.) — chapters 3 (lexical analysis) and 4 (syntax analysis).

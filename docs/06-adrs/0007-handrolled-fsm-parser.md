@@ -39,7 +39,7 @@ The forces summarized: per-request `BumpArena` integration ([ADR 0006](0006-bump
 - **Positive:**
   - The parser is readable end-to-end; the FSM table is a teaching artifact aligned with [Vision §3.2](../00-vision.md).
   - Per-request arena integration is clean: scratch from the arena, body slices borrowed from the input.
-  - No backtracking; the FSM always advances or waits, which matches the streaming-parser invariant from `Ch13`.
+  - No backtracking; the FSM always advances or waits, which matches the streaming-parser invariant from the table-driven FSM literature (dragon book ch. 3; `http_parser` / `picohttpparser` design).
   - Future MCP-aware extensions ([Options 026](../05-options/026-mcp-orchestration.md)) plug in as new FSM states or new transition tables, with no third-party shim.
   - Compile-time enumerable state space — missing transitions are visible at table construction time.
 - **Negative / accepted tradeoffs:**

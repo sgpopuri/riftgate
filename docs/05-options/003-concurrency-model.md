@@ -1,7 +1,7 @@
 # 003. Concurrency Model
 
 > **Status:** `recommended` — shared-nothing per-shard request scheduling in `v0.1`; work-stealing scheduler added as an opt-in in `v0.2`. See [ADR 0004](../06-adrs/0004-per-shard-default-stealing-opt-in.md).
-> **Source-systems chapters:** `Ch7 (work stealing)`, `Ch12 (system design patterns)`, `Ch4 (lock-free MPMC)` (for the queue half of the decision)
+> **Foundational topics:** work-stealing schedulers (Cilk-5 / Chase-Lev), shared-nothing per-shard isolation (bulkhead pattern), lock-free MPMC queues
 > **Related options:** [001](001-io-model.md) (IO model), [002](002-async-runtime.md) (async runtime), [004](004-request-queue.md) (request queue), [022](README.md) (priority/fairness, optional, gated on `v0.2` retro)
 > **Related ADR:** [ADR 0004](../06-adrs/0004-per-shard-default-stealing-opt-in.md)
 
@@ -129,16 +129,16 @@ for _ in 0..num_workers {
 | Compatibility with future thread-per-core runtime ([Options 002](002-async-runtime.md) `v0.2` retro) | poor | natural fit | possible | possible | Door must stay open. |
 | Compatibility with future priority scheduling ([Options 022](README.md), if pursued) | poor | natural | possible with steal-guards | natural | Gated on `v0.2` retro. |
 
-## 5. What the source-systems chapters say
+## 5. Foundational principles
 
-`Ch7 (work stealing)` is the single most important reference here. The chapter walks through Cilk's scheduler, the Chase-Lev deque, and the empirical case for stealing on heterogeneous workloads. Two passages stand out:
+**Work-stealing schedulers (Cilk-5 / Chase-Lev).** Two properties of the canonical work-stealing design shape this decision:
 
-1. **The fast-path / slow-path analysis.** Owner-side `push` and `pop` use only acquire-release atomics on the owner's deque (the fast path). Steal operations require an interlocked `cas` on the bottom pointer (the slow path). For workloads where stealing is rare, the cost is essentially free; for workloads where it is common, the cost is real and visible.
-2. **The "first-touch" cache argument.** A task that runs on its originating CPU enjoys cache-warm data. A stolen task pulls its working set across the cache hierarchy. The chapter is explicit: **steal coarse-grained tasks; never steal sub-microsecond tasks.** Riftgate's request granularity (tens to hundreds of microseconds) is firmly in the "steal-friendly" range.
+1. **Fast-path / slow-path asymmetry.** Owner-side `push` and `pop` use only acquire-release atomics on the owner's deque (the fast path). Steal operations require an interlocked compare-and-swap on the bottom pointer (the slow path). For workloads where stealing is rare, the cost is essentially free; for workloads where it is common, the cost is real and visible. (See Blumofe–Leiserson and Chase–Lev, both linked below.)
+2. **First-touch cache locality.** A task that runs on its originating CPU enjoys cache-warm data. A stolen task pulls its working set across the cache hierarchy. The well-established guidance is to steal coarse-grained tasks and never steal sub-microsecond tasks. Riftgate's request granularity (tens to hundreds of microseconds) is firmly in the "steal-friendly" range.
 
-`Ch12 (system design patterns)` covers the bulkhead and shard patterns at the architecture level. The bulkhead pattern argues for *separate queues per failure domain* so that one slow tenant cannot starve others. Shared-nothing per-shard is the bulkhead pattern at the worker level. The chapter is also clear: **start with shared-nothing; add stealing or sharing only when measurements demand it.** This is the source of our staged approach (per-shard in `v0.1`, work-stealing as opt-in in `v0.2`).
+**Shared-nothing per-shard isolation (bulkhead pattern).** The bulkhead pattern (Nygard, *Release It*) argues for separate queues per failure domain so that one slow tenant cannot starve others. Shared-nothing per-shard is the bulkhead pattern at the worker level, and ScyllaDB / Seastar's design notes make the case directly: start with shared-nothing; add stealing or sharing only when measurements demand it. This is the source of our staged approach (per-shard in `v0.1`, work-stealing as opt-in in `v0.2`).
 
-`Ch4 (lock-free MPMC)` covers the queue substrate. The Vyukov MPMC bounded queue is the canonical Rust implementation in `crossbeam`; sharded MPMC is just N of them. The chapter makes the cache-line padding case explicitly: producer and consumer atomics must live on different cache lines or false sharing degrades the queue back toward mutex-level performance. Riftgate's `MpmcQueue<T>` impl will follow this guidance.
+**Lock-free MPMC queues.** The Vyukov MPMC bounded queue is the canonical Rust implementation in `crossbeam`; sharded MPMC is just N of them. The cache-line padding requirement is explicit in the literature: producer and consumer atomics must live on different cache lines or false sharing degrades the queue back toward mutex-level performance. Riftgate's `MpmcQueue<T>` impl will follow this guidance.
 
 ## 6. Recommendation
 
@@ -177,7 +177,7 @@ The reasoning, restated:
 4. crossbeam-deque crate (Rust impl of Chase-Lev) — https://docs.rs/crossbeam-deque
 5. Carl Lerche, *Making the Tokio scheduler 10x faster* — https://tokio.rs/blog/2019-10-scheduler
 6. Avi Kivity, *Seastar: a high-performance shared-nothing framework* (ScyllaDB) — https://seastar.io/
-7. Andrew Hunt, *The pragmatic case for shared-nothing in production servers* (collected blog discussion).
-8. Riftgate source-systems chapter `Ch7 (work stealing)`
-9. Riftgate source-systems chapter `Ch12 (system design patterns)`
-10. Riftgate source-systems chapter `Ch4 (lock-free MPMC)`
+7. Michael Nygard, *Release It! Design and Deploy Production-Ready Software* (2nd ed., 2018) — bulkhead and circuit-breaker patterns.
+8. Dmitry Vyukov, *Bounded MPMC queue* (1024cores.net, 2011) — https://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue
+9. Paul E. McKenney, *Is Parallel Programming Hard, And, If So, What Can You Do About It?* — https://mirrors.edge.kernel.org/pub/linux/kernel/people/paulmck/perfbook/perfbook.html
+10. Maged M. Michael and Michael L. Scott, *Simple, Fast, and Practical Non-Blocking and Blocking Concurrent Queue Algorithms* (PODC 1996).

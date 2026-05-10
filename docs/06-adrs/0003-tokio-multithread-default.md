@@ -27,7 +27,7 @@ The discipline:
   - Riftgate inherits the entire Tokio ecosystem (`hyper`, `tonic`, `tower`, `tracing`, `metrics`, OpenTelemetry's Rust SDK, `wasmtime`'s async API) without writing adapter layers.
   - `tokio-console` and `tokio-metrics` give us best-in-class runtime introspection from day one.
   - Tokio's 1.x semver discipline means the runtime is not a moving target underneath us.
-  - The work-stealing scheduler is a sane default for our heterogeneous-cost workload (parser → router → upstream call → response framing); see `Ch7 (work stealing)`.
+  - The work-stealing scheduler is a sane default for our heterogeneous-cost workload (parser → router → upstream call → response framing); see the work-stealing literature (Blumofe–Leiserson Cilk-5; Tokio scheduler design notes) cited in [Options `002`](../05-options/002-async-runtime.md).
   - macOS dev convenience ([NFR-PT03](../01-requirements/non-functional.md)) works out of the box via mio's kqueue backend.
 - **Negative / accepted tradeoffs:**
   - We accept the small but non-zero overhead of Tokio's multi-threaded scheduler (global injector queue, cross-worker steal coordination) in exchange for the ecosystem and tooling wins.
