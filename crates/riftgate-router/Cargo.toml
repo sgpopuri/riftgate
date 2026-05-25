@@ -15,5 +15,9 @@ categories   = ["network-programming"]
 [dependencies]
 riftgate-core = { path = "../riftgate-core" }
 
+# xxHash3-64 byte hash for the v0.3 KvAwareRouter's prefix trie.
+# Per ADR 0022.
+xxhash-rust  = { workspace = true }
+
 [lints]
 workspace = true

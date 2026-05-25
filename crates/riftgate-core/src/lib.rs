@@ -89,9 +89,11 @@
 
 pub mod allocator;
 pub mod backpressure;
+pub mod cancel;
 pub mod capability;
 pub mod error;
 pub mod filter;
+pub mod gpu;
 pub mod io;
 pub mod obs;
 pub mod parser;
@@ -107,8 +109,13 @@ pub mod wal;
 // Convenience re-exports: the most-used types from any caller.
 pub use allocator::{Allocator, BumpArena, SystemAllocator};
 pub use backpressure::{AdmissionDecision, BackpressurePolicy, DenialReason, HighWaterPolicy};
+pub use cancel::{CancelCause, Cancellation, CancellationDriver};
 pub use error::RiftgateCoreError;
 pub use filter::{Filter, FilterAction, IdentityFilter, LoggingFilter};
+pub use gpu::{
+    GpuPressure, GpuPressureError, GpuPressureSource, GpuThrottleState, NoopGpuSource,
+    StaticGpuSource,
+};
 pub use io::{AsyncIO, Event, Interest};
 pub use obs::{InMemorySink, Labels, ObservabilityEvent, ObservabilitySink};
 pub use parser::{ParseError, ParseEvent, StreamParser};

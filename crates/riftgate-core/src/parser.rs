@@ -8,6 +8,7 @@
 //! See [`docs/04-design/lld-parsing.md`](../../../docs/04-design/lld-parsing.md)
 //! for the FSM design rationale.
 
+use crate::cancel::CancelCause;
 use crate::request::Headers;
 use thiserror::Error;
 
@@ -34,6 +35,19 @@ pub enum ParseEvent<'a> {
     /// The SSE stream has signalled completion (typically `data: [DONE]\n\n`
     /// for OpenAI streams).
     SseDone,
+    /// The SSE stream was *cancelled* mid-stream by the kernel
+    /// (client disconnect, deadline, hedge-loss, draining). Terminal
+    /// state: the framer emits no further events until `reset`. Per
+    /// [ADR `0020`](../../../docs/06-adrs/0020-stream-cancellation-cancellation-token.md).
+    Cancelled {
+        /// Total payload bytes the framer had emitted as `SseToken` events
+        /// before the cancellation tripped. Useful for diagnostics and
+        /// for the request-log entry written by the WAL.
+        bytes_seen: u64,
+        /// Typed cause of the cancellation. Stable for observability
+        /// labels.
+        cause: CancelCause,
+    },
     /// A structural parse error. The parser is left in a terminal state;
     /// callers must call `reset` before feeding a new request.
     Error(ParseError),

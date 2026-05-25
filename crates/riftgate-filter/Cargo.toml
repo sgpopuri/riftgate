@@ -1,0 +1,32 @@
+[package]
+name         = "riftgate-filter"
+description  = "Riftgate v0.3 filter chain executor and the frozen riftgate:filter/v1 component-model ABI host. Native FilterChain over the riftgate-core Filter trait + scaffold WasmFilter behind the `wasm` feature."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+readme       = "README.md"
+keywords     = ["riftgate", "filter", "extension", "wasm", "component-model"]
+categories   = ["network-programming"]
+
+[features]
+# Default ships the native `FilterChain` executor over `Vec<Arc<dyn Filter>>`.
+# The `wasm` feature is reserved for the production `WasmFilter` impl that
+# binds the frozen `riftgate:filter/v1` Component Model ABI per
+# [ADR 0019](../../docs/06-adrs/0019-wasm-extension-mechanism.md). The
+# wasmtime runtime, the WIT bindings, and the host-function table land in
+# a follow-on PR within v0.3 Phase B; this crate currently exposes the
+# `WasmFilter::scaffold` placeholder so callers can compile against the
+# type surface today.
+default = []
+wasm    = []
+
+[dependencies]
+riftgate-core = { path = "../riftgate-core" }
+tracing       = { workspace = true }
+
+[lints]
+workspace = true

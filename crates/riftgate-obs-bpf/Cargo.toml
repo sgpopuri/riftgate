@@ -1,0 +1,27 @@
+[package]
+name         = "riftgate-obs-bpf"
+description  = "Riftgate v0.4 in-tree eBPF programs (CPU on/off-time profiling, syscall stalls, TCP retransmits) compiled to bpfel-unknown-none and loaded by riftgate-obs's BpfSink. Empty library on every non-Linux target and on Linux when the `bpf` feature is off."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+readme       = "README.md"
+keywords     = ["riftgate", "ebpf", "aya", "linux", "observability"]
+categories   = ["network-programming", "development-tools::profiling"]
+
+[features]
+# Opt-in feature enabling the Aya-based BPF programs. Off by default so
+# macOS / Windows / non-Linux hosts compile the workspace cleanly. Per
+# [ADR 0024](../../docs/06-adrs/0024-ebpf-via-aya.md) the runtime is also
+# gated by `RIFTGATE_ENABLE_BPF=1` and requires `CAP_BPF` on the host.
+default = []
+bpf     = []
+
+[dependencies]
+riftgate-core = { path = "../riftgate-core" }
+
+[lints]
+workspace = true

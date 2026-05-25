@@ -27,10 +27,12 @@
 //!     |  (\n on blank line + current_event non-empty) --> emit SseToken / SseDone
 //!     |  (\n on event:/id:/comment line) --> ignore
 //!     |  (truly malformed, e.g. bare \r without \n) --> Error
+//!     |  (cancellation driver tripped, v0.3) --> emit Cancelled, transition to Cancelled (terminal)
 //!     v
-//!   Done (after SseDone)
+//!   Done (after SseDone)  |  Cancelled (after Cancelled emit)
 //! ```
 
+use riftgate_core::cancel::{CancelCause, CancellationDriver};
 use riftgate_core::parser::{ParseError, ParseEvent, StreamParser};
 
 /// Server-Sent Events stream framer. See module docs for the FSM.
@@ -44,6 +46,14 @@ pub struct SseFramer {
     /// Per-feed payload buffer. Cleared at the start of every `feed`;
     /// emitted events borrow from this buffer.
     output_buffer: Vec<u8>,
+    /// Total `SseToken` payload bytes emitted to date. Used by the v0.3
+    /// `Cancelled { bytes_seen, cause }` terminal event so the request
+    /// log records how much of the stream the client actually saw.
+    bytes_seen: u64,
+    /// Optional cancellation hook. When set and tripped, the next `feed`
+    /// call emits `ParseEvent::Cancelled { bytes_seen, cause }` and the
+    /// framer transitions to `Phase::Cancelled`.
+    cancellation: Option<CancellationDriver>,
     phase: Phase,
 }
 
@@ -52,17 +62,38 @@ enum Phase {
     Reading,
     Done,
     Error,
+    Cancelled,
 }
 
 impl SseFramer {
-    /// Construct a new `SseFramer` in the initial state.
+    /// Construct a new `SseFramer` in the initial state with no
+    /// cancellation hook.
     pub fn new() -> Self {
         Self {
             line_buf: Vec::with_capacity(256),
             current_event: Vec::with_capacity(512),
             output_buffer: Vec::with_capacity(2048),
+            bytes_seen: 0,
+            cancellation: None,
             phase: Phase::Reading,
         }
+    }
+
+    /// Construct a framer wired to the given cancellation driver. When
+    /// the driver trips (client disconnect, deadline, hedge-loss,
+    /// draining), the framer emits a terminal `Cancelled` event and stops
+    /// producing further events until [`StreamParser::reset`] is called.
+    pub fn with_cancellation(driver: CancellationDriver) -> Self {
+        Self {
+            cancellation: Some(driver),
+            ..Self::new()
+        }
+    }
+
+    /// Number of `SseToken` payload bytes emitted by this framer to date.
+    /// Useful in observability events and tests.
+    pub fn bytes_seen(&self) -> u64 {
+        self.bytes_seen
     }
 }
 
@@ -75,6 +106,7 @@ impl Default for SseFramer {
 enum Emit {
     Token(std::ops::Range<usize>),
     Done,
+    Cancelled(CancelCause),
     Error(ParseError),
 }
 
@@ -85,9 +117,22 @@ impl StreamParser for SseFramer {
         self.output_buffer.clear();
 
         let mut emit: Vec<Emit> = Vec::new();
-        if matches!(self.phase, Phase::Done | Phase::Error) {
+        if matches!(self.phase, Phase::Done | Phase::Error | Phase::Cancelled) {
             // No further events.
             return Vec::new();
+        }
+
+        // Cancellation gate: if the driver tripped between the last feed
+        // and this one, emit a terminal `Cancelled` event and stop. The
+        // gate is checked *before* consuming `bytes` so the framer never
+        // produces an `SseToken` after the cancellation cause is
+        // observed.
+        if let Some(driver) = self.cancellation.as_ref() {
+            if driver.is_cancelled() {
+                emit.push(Emit::Cancelled(driver.cause()));
+                self.phase = Phase::Cancelled;
+                return finalize(&mut self.output_buffer, emit, self.bytes_seen);
+            }
         }
 
         for &b in bytes.iter() {
@@ -107,6 +152,7 @@ impl StreamParser for SseFramer {
                         let start = self.output_buffer.len();
                         self.output_buffer.extend_from_slice(&self.current_event);
                         let end = self.output_buffer.len();
+                        self.bytes_seen += (end - start) as u64;
                         emit.push(Emit::Token(start..end));
                         self.current_event.clear();
                     }
@@ -127,10 +173,15 @@ impl StreamParser for SseFramer {
         }
 
         let buf: &[u8] = &self.output_buffer;
+        let bytes_seen = self.bytes_seen;
         emit.into_iter()
             .map(|i| match i {
                 Emit::Token(r) => ParseEvent::SseToken(&buf[r]),
                 Emit::Done => ParseEvent::SseDone,
+                Emit::Cancelled(c) => ParseEvent::Cancelled {
+                    bytes_seen,
+                    cause: c,
+                },
                 Emit::Error(e) => ParseEvent::Error(e),
             })
             .collect()
@@ -140,8 +191,33 @@ impl StreamParser for SseFramer {
         self.line_buf.clear();
         self.current_event.clear();
         self.output_buffer.clear();
+        self.bytes_seen = 0;
         self.phase = Phase::Reading;
     }
+}
+
+/// Helper for the cancellation-gate early return: consume the emit
+/// vector, ignoring any borrowed ranges (the gate only emits `Cancelled`).
+fn finalize(
+    _output_buffer: &mut Vec<u8>,
+    emit: Vec<Emit>,
+    bytes_seen: u64,
+) -> Vec<ParseEvent<'_>> {
+    emit.into_iter()
+        .map(|i| match i {
+            Emit::Cancelled(c) => ParseEvent::Cancelled {
+                bytes_seen,
+                cause: c,
+            },
+            Emit::Error(e) => ParseEvent::Error(e),
+            // The cancellation gate only constructs `Emit::Cancelled` (or
+            // `Emit::Error` if a future variant calls in), so the token /
+            // done branches are unreachable in practice. We collapse them
+            // to a `Done` event to keep this helper total without an
+            // unwrap.
+            Emit::Token(_) | Emit::Done => ParseEvent::SseDone,
+        })
+        .collect()
 }
 
 /// Process one SSE line into the current-event payload.
@@ -269,5 +345,31 @@ mod tests {
             }
         }
         assert_eq!(tokens, vec![b"world".to_vec()]);
+    }
+
+    #[test]
+    fn cancellation_emits_terminal_cancelled_event() {
+        use riftgate_core::cancel::Cancellation;
+        let c = Cancellation::new();
+        let mut f = SseFramer::with_cancellation(c.driver());
+        // Feed a complete event so bytes_seen advances.
+        let evs = f.feed(b"data: hello\n\n");
+        assert_eq!(evs.len(), 1);
+        assert!(matches!(evs[0], ParseEvent::SseToken(_)));
+        // Trip the cancellation.
+        c.cancel(CancelCause::HedgeLost);
+        // Subsequent feed produces exactly one terminal Cancelled event.
+        let evs2 = f.feed(b"data: world\n\n");
+        assert_eq!(evs2.len(), 1);
+        match &evs2[0] {
+            ParseEvent::Cancelled { bytes_seen, cause } => {
+                assert_eq!(*bytes_seen, 5); // "hello"
+                assert_eq!(*cause, CancelCause::HedgeLost);
+            }
+            other => panic!("expected Cancelled, got {other:?}"),
+        }
+        // Further feeds produce nothing.
+        let evs3 = f.feed(b"data: ignored\n\n");
+        assert!(evs3.is_empty());
     }
 }

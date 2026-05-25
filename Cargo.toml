@@ -24,6 +24,8 @@ members = [
     "crates/riftgate-obs",
     "crates/riftgate-replay",
     "crates/riftgate-io-uring",
+    "crates/riftgate-filter",
+    "crates/riftgate-obs-bpf",
 ]
 exclude = [
     # cargo-fuzz sub-packages are opt-in; cargo-fuzz invokes them
@@ -49,6 +51,7 @@ authors       = ["Sriram Popuri"]
 # Async runtime + IO. ADR 0003 pins us to tokio multi-thread; ADR 0002 starts
 # the IO subsystem on epoll (via mio).
 tokio        = { version = "1.40",  features = ["full"] }
+tokio-util   = { version = "0.7",   features = ["rt"] }
 mio          = { version = "1.0",   features = ["os-poll", "net"] }
 
 # io_uring backend for the AsyncIO trait (Linux 5.10+, opt-in via the
@@ -110,6 +113,18 @@ pin-project  = "1"
 
 # CLI.
 clap         = { version = "4.5",   features = ["derive", "env"] }
+
+# Phase B + Phase D additions.
+#
+# `xxhash-rust` (xxh3 feature) provides the 64-bit non-cryptographic hash that
+# the v0.3 KvAwareRouter uses for prefix-keyed backend affinity, per
+# [ADR 0022](docs/06-adrs/0022-kv-aware-routing-prefix-trie.md).
+#
+# `hdrhistogram` is the bounded-range high-dynamic-range histogram implementation
+# used by the v0.4 `TokenLevelAggregator` for TTFT / inter-token / jitter
+# aggregates per [ADR 0025](docs/06-adrs/0025-token-level-metrics-probabilistic.md).
+xxhash-rust  = { version = "0.8",  features = ["xxh3"] }
+hdrhistogram = { version = "7.5",  default-features = false }
 
 # Dev / bench / fuzz.
 criterion    = { version = "0.5",   features = ["async_tokio"] }

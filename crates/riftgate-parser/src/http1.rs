@@ -257,6 +257,7 @@ mod tests {
                 ParseEvent::BodyComplete => complete = true,
                 ParseEvent::Error(e) => err = Some(e),
                 ParseEvent::SseToken(_) | ParseEvent::SseDone => panic!("unexpected SSE event"),
+                ParseEvent::Cancelled { .. } => panic!("unexpected SSE cancellation"),
             }
         }
         (headers, body, complete, err)

@@ -31,6 +31,13 @@ thiserror = { workspace = true }
 # These are zero-cost when the subscriber drops events.
 tracing  = { workspace = true }
 
+# v0.3 cancellation primitive (ADR 0020). `Cancellation` and
+# `CancellationDriver` are thin newtypes over `tokio_util::sync::CancellationToken`;
+# the kernel pulls tokio-util so every consumer (router, parser, filter chain,
+# binary) shares one substrate.
+tokio       = { workspace = true }
+tokio-util  = { workspace = true }
+
 [dev-dependencies]
 proptest = { workspace = true }
 criterion = { workspace = true }
