@@ -168,7 +168,7 @@ pub enum RoutingDecision {
 /// Outcome of an upstream call, fed back to the router via
 /// [`Router::on_response`].
 ///
-/// Distinct from [`crate::request::Outcome`] in that this carries
+/// Distinct from `crate::request::Response` in that this carries
 /// router-relevant signals only.
 #[derive(Debug, Clone)]
 pub struct Outcome {

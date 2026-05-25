@@ -17,7 +17,7 @@
 //!
 //! - [`Config`] — the typed root configuration struct.
 //! - [`load`] — pure function `load(path, env) -> Result<Config>`. Re-runnable.
-//! - [`validate`] — runs after the merge; returns every violation, not
+//! - [`validate()`] — runs after the merge; returns every violation, not
 //!   just the first.
 //! - [`Secret`] — newtype that redacts at every leak surface.
 //! - [`ConfigError`] — typed error variants surfaced by the loader and

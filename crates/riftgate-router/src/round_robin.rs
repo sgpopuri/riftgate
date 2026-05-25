@@ -2,7 +2,7 @@
 //!
 //! Maintains a single `AtomicUsize` cursor; on each `route` call, the
 //! cursor is fetched-and-incremented (`Relaxed` ordering) and used as
-//! the index into the [`BackendPool`](riftgate_core::router::BackendPool)
+//! the index into the [`BackendPool`]
 //! modulo the pool size.
 //!
 //! ```text

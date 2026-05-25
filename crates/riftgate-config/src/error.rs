@@ -30,7 +30,7 @@ impl core::fmt::Display for SourceLayer {
 
 /// Configuration loading or validation error.
 ///
-/// Returned by [`crate::load`] and [`crate::validate`]. Errors are
+/// Returned by [`crate::load`] and [`crate::validate()`]. Errors are
 /// accumulated where possible (the binary surfaces every violation, not
 /// just the first) so operators can fix multiple issues per
 /// edit-validate cycle.

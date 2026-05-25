@@ -2,7 +2,7 @@
 //!
 //! Layered merge: defaults → file → env. Each layer is applied in turn;
 //! validation runs against the *effective* (merged) config (in
-//! [`crate::validate`]).
+//! [`crate::validate()`]).
 //!
 //! The loader is **re-runnable**: it is a pure function of `(path,
 //! env)`, with no global state. The v0.2/v0.3 hot-reload path consumes

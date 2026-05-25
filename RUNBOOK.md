@@ -37,12 +37,24 @@ The resulting binary lives at `target/release/riftgate`. There is no `cargo inst
 The full pre-commit verification, in the order CI runs:
 
 ```bash
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- --deny warnings
+cargo test --workspace --all-features
+RUSTDOCFLAGS='--deny warnings' cargo doc --workspace --no-deps --document-private-items
 ```
 
-All three must pass before opening a PR. Local hooks are not required; CI rejects on any failure.
+Primary CI parity checks all pass locally if the four commands above pass.
+
+Additional CI jobs:
+
+```bash
+# Optional locally (CI always runs these).
+cargo deny check --all-features
+mdbook build
+```
+
+`cargo-deny` and `mdbook` are not required for normal development loops, but run them before
+merging changes that touch dependency policy (`deny.toml`) or book/docs structure.
 
 Targeted tests during iteration:
 
@@ -152,6 +164,9 @@ benchmarks/             cross-crate benchmark harnesses (v0.3+)
 - **`cargo bench` fails with `cannot find -lzstd` or similar.** Some criterion baselines pull system libs; install the relevant `-dev` package for your distro and re-run.
 - **CI is red on `cargo fmt --check` only.** Run `cargo fmt` locally and amend.
 - **CI is red on `clippy` only.** Reproduce with `cargo clippy --workspace --all-targets -- -D warnings`. We do not turn off lints; address the diagnostic.
+- **CI is red on `cargo doc` only.** Reproduce with `RUSTDOCFLAGS='--deny warnings' cargo doc --workspace --no-deps --document-private-items`; most failures are broken or ambiguous intra-doc links.
+- **CI is red on `mdbook` only.** Reproduce with `mdbook build`; this usually means a broken docs link or invalid SUMMARY entry.
+- **CI is red on `cargo deny` only.** Reproduce with `cargo deny check --all-features`; install with `cargo install cargo-deny` if needed.
 - **`cargo test` hangs in `riftgate-replay`.** The WAL flusher thread joins on shutdown; a deadlock here usually means a test forgot to drop the `FileWal` handle. Run with `RUST_BACKTRACE=1` and look for the parked thread holding `ShardState`.
 
 ## When to update this file

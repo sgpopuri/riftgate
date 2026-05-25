@@ -2,7 +2,7 @@
 //!
 //! This is the *library* entry point of the v0.1 Riftgate binary. The
 //! actual binary, `src/main.rs`, is a thin wrapper around
-//! [`run_with_args`] / [`run`] so that integration tests can construct
+//! `run_with_args` / `run` so that integration tests can construct
 //! the same handler stack that the binary builds and exercise it
 //! against a mock upstream.
 //!

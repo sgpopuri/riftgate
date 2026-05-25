@@ -5,7 +5,7 @@
 //! On Linux this resolves to `epoll(7)`; on macOS and BSD it resolves to
 //! `kqueue(2)`. The single [`MioIO`] struct wraps both via mio's
 //! cross-platform abstraction; the platform-conditional aliases
-//! [`EpollIO`] and [`KqueueIO`] let callers express the platform
+//! `EpollIO` and `KqueueIO` let callers express the platform
 //! commitment explicitly when desired.
 //!
 //! Per [ADR 0002](../../../docs/06-adrs/0002-start-on-epoll.md) this is the

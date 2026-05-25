@@ -24,12 +24,12 @@
 //!
 //! Spans emitted, in order:
 //!
-//! - [`spans::REQUEST_RECEIVED`](riftgate_obs::spans::REQUEST_RECEIVED)
-//! - [`spans::REQUEST_QUEUED`](riftgate_obs::spans::REQUEST_QUEUED)
-//! - [`spans::REQUEST_DISPATCHED`](riftgate_obs::spans::REQUEST_DISPATCHED)
-//! - [`spans::REQUEST_FIRST_TOKEN`](riftgate_obs::spans::REQUEST_FIRST_TOKEN)
+//! - [`spans::REQUEST_RECEIVED`]
+//! - [`spans::REQUEST_QUEUED`]
+//! - [`spans::REQUEST_DISPATCHED`]
+//! - [`spans::REQUEST_FIRST_TOKEN`]
 //!   (on first non-empty response data frame)
-//! - [`spans::REQUEST_COMPLETED`](riftgate_obs::spans::REQUEST_COMPLETED)
+//! - [`spans::REQUEST_COMPLETED`]
 //!   (on body end-of-stream)
 
 use crate::health;
@@ -383,7 +383,7 @@ fn publish_span(publisher: &Publisher, id: RequestId, name: &'static str, durati
 /// end-of-stream so the proxy can emit `request.first_token` and
 /// `request.completed` spans without buffering the response.
 ///
-/// `request.completed` is emitted in [`PinnedDropImpl`] so the span
+/// `request.completed` is emitted in `PinnedDrop` so the span
 /// fires regardless of who terminates the body (full read, client
 /// disconnect, error mid-stream).
 #[pin_project(PinnedDrop)]
