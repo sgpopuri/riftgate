@@ -9,6 +9,34 @@
 //!
 //! The drop-on-full discipline is enforced at the publisher, not at the
 //! sink: even if the sink hangs forever, the data plane never blocks.
+//!
+//! ## Flow
+//!
+//! ```text
+//!  data plane (many tasks / shards)                worker thread (one per Bus)
+//!  --------------------------------                ----------------------------
+//!  Publisher (Sender clone)
+//!       publish(event):                            loop {
+//!         try_send(event)                            match receiver.recv() {
+//!            Ok      -> queued -------------------->   Ok(ev)  -> sink.publish(ev)
+//!            Full    -> dropped += 1                   Err(_)  -> break  // all
+//!            Disconn -> dropped += 1                                     // senders
+//!                                                                        // gone
+//!                                                  }
+//!                                                  thread exits; Bus drop is non-
+//!                                                  blocking (JoinHandle detached).
+//!
+//!  Channel: crossbeam_channel::bounded(capacity)
+//!     Senders: cloneable Publisher handles (cheap; one Arc each)
+//!     Receiver: owned by the worker thread
+//!     Backpressure: caller sees Full immediately; dropped counter is the
+//!                   single canonical signal that the sink is slower than
+//!                   the data plane.
+//! ```
+//!
+//! Choosing `capacity`: aim for ~ events-per-second × worst tolerated sink
+//! latency. Riftgate's default `1024` covers ~50 ms of OTel exporter
+//! hiccups at 20k events/s without dropping.
 
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded};
 use riftgate_core::obs::{ObservabilityEvent, ObservabilitySink};

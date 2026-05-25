@@ -34,6 +34,34 @@ For code changes:
 - Mermaid diagrams: no spaces in node IDs, quote labels with parentheses or other special characters, avoid `end` / `subgraph` / `graph` / `flowchart` as node IDs. The full convention list is in `[AGENTS.md](AGENTS.md)` §11.
 - No emojis in docs or code.
 
+## Code commenting discipline
+
+Riftgate is a teaching artifact. Source comments are part of the contract: a reader landing on a file should learn the *theory* of that file, not just its mechanics. To keep that bar concrete we require **module-level ASCII diagrams** whenever the module owns any of:
+
+1. A non-trivial **data structure with internal layout** (packed atomics, sharded maps, ring buffers, alias tables, segment files).
+2. **More than one thread, task, or actor** sharing state — show who locks what, who notifies whom, where parking happens.
+3. A **state machine with more than two states** (parsers, breakers, drain coordinators).
+4. A **packed bit layout in an atomic** (always document the bit ranges).
+5. A **flow control or fast path** worth distinguishing from the slow path.
+
+Conventions:
+
+- Place the diagram in the module doc (`//!`) before any `use` statement. Type-specific layouts go in the type's `///` doc.
+- Fence diagrams with ```` ```text ```` inside the doc comment so rustdoc renders them in monospace without trying to compile them as Rust.
+- Cite the governing ADR and LLD next to the diagram so design rationale and visualization stay co-located.
+- ASCII only. No Unicode box-drawing characters (rustdoc renders them, but `grep` and many terminals do not). No emojis.
+- Keep diagrams under ~30 lines. If the picture wants to be larger, link out to the LLD's Mermaid diagram and keep only the load-bearing skeleton in source.
+
+Examples already in the tree, worth reading before adding your own:
+
+- [`crates/riftgate/src/scheduler.rs`](crates/riftgate/src/scheduler.rs) — `ShardedMpmcQueue` data layout + worker lifecycle.
+- [`crates/riftgate-core/src/rate_limit.rs`](crates/riftgate-core/src/rate_limit.rs) — packed `AtomicU64` bit layout + CAS retry fast path.
+- [`crates/riftgate-router/src/circuit.rs`](crates/riftgate-router/src/circuit.rs) — 3-state breaker + decorator data flow.
+- [`crates/riftgate-replay/src/file_wal.rs`](crates/riftgate-replay/src/file_wal.rs) — on-disk frame format + per-shard flusher topology.
+- [`crates/riftgate-parser/src/http1.rs`](crates/riftgate-parser/src/http1.rs) — parser FSM.
+
+This convention applies retroactively to existing modules and prospectively to every future phase. PRs that introduce a load-bearing data structure or state machine without the corresponding diagram will be sent back for one.
+
 ## Working with AI agents on this project
 
 Before letting any agent edit files in this repo, read `[AGENTS.md](AGENTS.md)`. It defines the component context, project context, loading protocol, invariants, and verification checklist. PRs that violate these expectations will be closed with a request to re-do the work under the harness.

@@ -29,6 +29,56 @@
 //! [ADR 0003](../../../../docs/06-adrs/0003-tokio-multithread-default.md);
 //! `PerShardScheduler` is constructed and exercised by tests and the
 //! `--features per-core-scheduler` migration path.
+//!
+//! ## Data layout
+//!
+//! ```text
+//!                  ShardedMpmcQueue<Task>
+//!                  +--------------------------------------------------+
+//!  producers  --> | cursor: AtomicUsize (round-robin fan-out)         |
+//!  (many)         +--------------------------------------------------+
+//!                 | shards: Vec<MpmcQueue<Task>>                      |
+//!                 |  +--------+  +--------+  +--------+   +--------+ |
+//!                 |  | shard0 |  | shard1 |  | shard2 |...| shardN | |
+//!                 |  |  cap C |  |  cap C |  |  cap C |   |  cap C | |
+//!                 |  +---^----+  +---^----+  +---^----+   +---^----+ |
+//!                 +------|----------|-----------|------------|-------+
+//!                        |          |           |            |
+//!                   worker_0    worker_1   worker_2   ... worker_N
+//!                  (pinned to    (pinned)     (pinned)      (pinned)
+//!                   shard0)
+//! ```
+//!
+//! Each worker thread owns exactly one shard for the lifetime of the
+//! scheduler. `pop_or_steal` exists as the seam for opting into work
+//! stealing later; v0.2 default `run` uses `pop_from(idx)` only.
+//!
+//! ## Lifecycle
+//!
+//! ```text
+//!  PerShardScheduler::new(N, C, poll_idle)
+//!         |
+//!         v
+//!  spawn N worker threads ---->  loop {
+//!                                   match queue.pop_from(idx) {
+//!                                       Some(task) => task();
+//!                                       None       => park(poll_idle);
+//!                                   }
+//!                                   if shutdown.load() && empty -> break
+//!                                }
+//!
+//!  Scheduler::submit(task)
+//!         |
+//!         v
+//!  cursor++ % N --> push_inner on chosen shard
+//!                       on full -> walk shards once, else return Err(task)
+//!                       (caller then runs the backpressure policy)
+//!
+//!  PerShardScheduler::shutdown()
+//!         |
+//!         v
+//!  shutdown.store(true) --> workers drain remaining tasks, then join
+//! ```
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

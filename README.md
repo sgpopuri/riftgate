@@ -4,7 +4,7 @@
 
 Riftgate is a repo-first exploration of the systems decisions behind a robust LLM gateway. The goal is not to start with a grand product announcement. The goal is to make the specs, options, decisions, architecture notes, and eventually code public as the project takes shape.
 
-**Status: `v0.1` walking skeleton complete (tagged 2026-05-10); `v0.2` (production scheduler, in-proc rate limiter, file WAL) is the next active milestone.** The first Rust binary is in. The `v0.0` design surface — vision, requirements, four-plane architecture (data, control, extension, observability), ten low-level design notes, nine Options docs, and the foundational ADRs — is in the repo. `v0.1` adds the walking-skeleton crates (`riftgate-core`, `riftgate-io-epoll`, `riftgate-parser`, `riftgate-config`, `riftgate-router`, `riftgate-obs`, and the `riftgate` binary), three additional Options docs (`006-timer-subsystem`, `013-observability-sink`, `015-config-model`), three new ADRs (`0010`, `0011`, `0012`), six criterion benchmarks, and a self-contained [`examples/01-basic-openai-proxy`](examples/01-basic-openai-proxy/) dev loop. Retrospectives: [`v0.0`](docs/02a-v0.0-retrospective.md), [`v0.1`](docs/02b-v0.1-retrospective.md).
+**Status: `v0.2` shipped (production scheduler, in-proc token-bucket rate limiter, weighted + 3-state-breaker routing, drop-newest backpressure, per-shard file WAL, io-uring scaffold). `v0.3` (perf sweep, headline benchmarks, eBPF observability) is the next active milestone.** The `v0.0` design surface — vision, requirements, four-plane architecture (data, control, extension, observability), low-level design notes, Options docs, and foundational ADRs — landed first. `v0.1` shipped the walking-skeleton crates (`riftgate-core`, `riftgate-io-epoll`, `riftgate-parser`, `riftgate-config`, `riftgate-router`, `riftgate-obs`, and the `riftgate` binary) and a self-contained [`examples/01-basic-openai-proxy`](examples/01-basic-openai-proxy/) dev loop. `v0.2` then added the `PerCoreScheduler`, `TokenBucketLimiter`, `WeightedRandomRouter`, `CircuitBreakerArbiter`, `HighWaterPolicy`, the new [`crates/riftgate-replay`](crates/riftgate-replay/) `FileWal`, and the [`crates/riftgate-io-uring`](crates/riftgate-io-uring/) scaffold. Retrospectives: [`v0.0`](docs/02a-v0.0-retrospective.md), [`v0.1`](docs/02b-v0.1-retrospective.md), [`v0.2`](docs/02c-v0.2-retrospective.md).
 
 ## Why Riftgate exists
 
@@ -59,9 +59,22 @@ Read in this order if you are new:
 | Config model | [`015-config-model`](docs/05-options/015-config-model.md) | [`0012`](docs/06-adrs/0012-toml-plus-env-fail-loudly.md) | `riftgate-config` |
 | Language choice | n/a (foundational) | [`0001`](docs/06-adrs/0001-rust-not-go-or-zig.md) | Rust, stable toolchain |
 
-`v0.2` takes on the custom `PerCoreScheduler`, the production timer wheel, the in-proc rate limiter, and the WAL. See the [MVP roadmap](docs/02-mvp-roadmap.md) for what ships when, the [Options index](docs/05-options/README.md), and the [ADR index](docs/06-adrs/README.md) for the full decision history.
+`v0.2` added five more decision pairs on top of the walking skeleton:
+
+| Subsystem | Options doc | ADR | Shipped in |
+|-----------|-------------|-----|------------|
+| Per-core scheduler | [`003-concurrency-model`](docs/05-options/003-concurrency-model.md) | [`0004`](docs/06-adrs/0004-per-shard-default-stealing-opt-in.md), [`0005`](docs/06-adrs/0005-sharded-mpmc-queue.md) | `PerCoreScheduler` + `ShardedMpmcQueue` in `crates/riftgate` |
+| Rate limiting | [`021-rate-limiting`](docs/05-options/021-rate-limiting.md), [`023-token-bucket-parameters`](docs/05-options/023-token-bucket-parameters.md) | [`0009`](docs/06-adrs/0009-rate-limiter-trait-in-proc-only.md), [`0018`](docs/06-adrs/0018-token-bucket-parameters.md) | `TokenBucketLimiter` in `crates/riftgate-core` |
+| Weighted + circuit-breaker routing | [`010-routing-strategy`](docs/05-options/010-routing-strategy.md), [`011-circuit-breaker`](docs/05-options/011-circuit-breaker.md) | [`0014`](docs/06-adrs/0014-weighted-random-router.md), [`0016`](docs/06-adrs/0016-three-state-circuit-breaker.md) | `WeightedRandomRouter` + `CircuitBreakerArbiter` in `crates/riftgate-router` |
+| Backpressure | [`012-backpressure`](docs/05-options/012-backpressure.md) | [`0017`](docs/06-adrs/0017-drop-newest-503-backpressure.md) | `HighWaterPolicy` in `crates/riftgate-core` |
+| Request log / WAL | [`009-request-log`](docs/05-options/009-request-log.md) | [`0013`](docs/06-adrs/0013-append-only-file-wal.md) | `FileWal` in `crates/riftgate-replay` |
+| Second IO impl | [`001-io-model`](docs/05-options/001-io-model.md) | [`0002`](docs/06-adrs/0002-start-on-epoll.md) (extension) | `crates/riftgate-io-uring` scaffold |
+
+`v0.3` opens with a perf sweep, headline benchmarks against LiteLLM / Envoy AI Gateway baselines, and the first eBPF observability slice. See the [MVP roadmap](docs/02-mvp-roadmap.md) for what ships when, the [Options index](docs/05-options/README.md), and the [ADR index](docs/06-adrs/README.md) for the full decision history.
 
 **Distribution:** through v0.4, install is **build from source** only (no [crates.io](https://crates.io) publish). Whether we add `cargo install` is a **v1.0** decision — see [Distribution](docs/02-mvp-roadmap.md#distribution-cratesio) in the roadmap.
+
+For day-to-day build, test, run, and bench commands, see the [`RUNBOOK.md`](RUNBOOK.md).
 
 ```bash
 git clone https://github.com/sgpopuri/riftgate.git && cd riftgate

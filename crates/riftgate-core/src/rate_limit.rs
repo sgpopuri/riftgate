@@ -151,6 +151,55 @@ impl Default for TokenBucketConfig {
 ///   factor `SCALE = 1 << 16` gives microtoken-precision arithmetic
 ///   without floats and matches the rate-limit microbench's
 ///   `NFR-P07` budget.
+///
+/// ## Packed `AtomicU64` layout (one per SubjectKey)
+///
+/// ```text
+/// bit  63                              32 31                              0
+///      +---------------------------------+-------------------------------+
+///      |  tokens_scaled (u32)            |  last_refill_ms_since_start   |
+///      |  raw tokens * (1 << 16)         |  monotonic ms, wraps ~49d     |
+///      +---------------------------------+-------------------------------+
+///
+///         high 32 bits = available capacity     low 32 bits = clock
+/// ```
+///
+/// ## DashMap shard layout
+///
+/// ```text
+///   DashMap<SubjectKey, AtomicU64>   (TOKEN_BUCKET_SHARDS = 64)
+///   +----------+----------+----------+ ... +----------+
+///   | shard 0  | shard 1  | shard 2  |     | shard 63 |
+///   | RwLock<HashMap<K, AtomicU64>>            ...     |
+///   +----------+----------+----------+ ... +----------+
+///       ^           ^           ^                ^
+///       |           |           |                |
+///   subjects hash-routed to one shard; shard lock taken once at
+///   insert; hot subjects then ride the per-entry AtomicU64 forever.
+/// ```
+///
+/// ## Fast-path flow
+///
+/// ```text
+///  check(subject, cost)
+///       |
+///       v
+///  DashMap entry -- miss --> insert AtomicU64(full_state(now_ms))
+///       |
+///       v
+///  loop {
+///       observed   = entry.load(Acquire)
+///       (tok, ts)  = unpack(observed)
+///       elapsed_ms = now_ms.wrapping_sub(ts)          # u32 wrap-safe
+///       refilled   = min(tok + elapsed_ms*rate/1000*SCALE, burst*SCALE)
+///       if refilled < cost*SCALE:
+///           CAS(observed, pack(refilled, now_ms))     # write-through
+///           return Deny { retry_after: deficit/rate }
+///       new_tok = refilled - cost*SCALE
+///       if CAS(observed, pack(new_tok, now_ms)) ok -> return Allow
+///       else retry                                    # 1-2 typical
+///  }
+/// ```
 /// - Refill is lazy: on each `check`, we compute the elapsed milliseconds
 ///   since `last_refill`, add `elapsed_ms * rate_per_sec / 1000` scaled
 ///   tokens, clamp to `burst`, attempt to subtract `cost`, and CAS the

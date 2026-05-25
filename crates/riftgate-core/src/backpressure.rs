@@ -18,6 +18,32 @@
 //! - [`AdmissionDecision`] — the per-call output.
 //! - [`BackpressurePolicy`] — the trait.
 //! - [`HighWaterPolicy`] — the v0.2 high/low-water implementation.
+//!
+//! ## Hysteresis state machine
+//!
+//! ```text
+//!   depth ^
+//!         |                       <----- high_water threshold ----->
+//!         |                       depth >= high_water  =>  flip to Shedding
+//!         |---------+--------+----+----+----+----+--------+---------
+//!         |        / \      / \           /  \          / \
+//!         |       /   \    /   \         /    \        /   \
+//!         |      /     \  /     \       /      \      /     \
+//!         |- - -|- - - - X - - - X - - X- - - - X - - X- - - X- -  low_water
+//!         |    /         \       \   /          \           /
+//!         |   /           \       \ /            \         /
+//!         |                       depth <= low_water => flip to Admitting
+//!         |
+//!         +-------------------------------------------------------> time
+//!
+//!   AtomicBool shedding:
+//!     false (Admitting) --- on_enqueue(depth) returns Admit while depth < high_water
+//!     true  (Shedding)  --- on_enqueue(depth) returns Reject{QueueFull, retry_after}
+//!                            until depth <= low_water
+//! ```
+//!
+//! The decision is a pure function of `(depth, shedding_flag)`; the
+//! caller is the only mutator of the queue itself.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;

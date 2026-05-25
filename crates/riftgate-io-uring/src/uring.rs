@@ -8,6 +8,52 @@
 //! The conformance suite under
 //! `crates/riftgate-io-epoll/tests/conformance.rs` becomes a shared harness
 //! in v0.3; this crate ships construction + register + poll plumbing only.
+//!
+//! ## io_uring ring layout (kernel + userspace shared memory)
+//!
+//! ```text
+//!                  userspace                          kernel
+//!                 +--------------------+           +------------+
+//!  register(fd) ->| Submission Queue   |---------->|            |
+//!                 | (mmap'd, lock-free)|  io_uring | sqe worker |
+//!                 |   PollAdd(fd, mask)|  enter()  |            |
+//!                 |   user_data=token  |---------->|            |
+//!                 +--------------------+           +------------+
+//!                                                        |
+//!                                                        v
+//!                                                  ready event
+//!                                                        |
+//!                 +--------------------+                  |
+//!  poll()      <--| Completion Queue   |<-----------------+
+//!                 | (mmap'd, lock-free)|  io_uring         cqe.user_data
+//!                 |   cqe.result mask  |  enter()          = our token
+//!                 |   cqe.user_data    |
+//!                 +--------------------+
+//! ```
+//!
+//! ## Per-call flow
+//!
+//! ```text
+//!  register(fd, token, interest):
+//!     registrations[fd] = (token, interest)
+//!     mask = POLLIN if readable else 0 | POLLOUT if writable else 0
+//!     PollAdd(fd, mask, user_data=token).push(SQ); submit()
+//!
+//!  poll(timeout):
+//!     submit_and_wait( 0 if timeout==ZERO else 1 )
+//!     for cqe in CQ:
+//!         if cqe.result < 0: skip   # -errno
+//!         events.push(Event { token=cqe.user_data,
+//!                              readable=mask & POLLIN,
+//!                              writable=mask & POLLOUT })
+//!     # PollAdd is one-shot; re-arm every fd that fired.
+//!     for (fd, tok, intr) in fds_that_fired: submit_poll(...)
+//!
+//!  deregister(fd): drop from registrations; lingering CQEs ignored.
+//! ```
+//!
+//! Per-shard ownership applies: each shard owns one `UringIO`; the ring
+//! is not `Send`.
 
 use io_uring::{IoUring, opcode, types};
 use riftgate_core::io::{AsyncIO, Event, Interest};

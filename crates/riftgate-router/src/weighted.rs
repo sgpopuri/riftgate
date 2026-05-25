@@ -12,6 +12,48 @@
 //! Backends with `CircuitState::Open` are skipped at route time; if every
 //! backend is open the router returns
 //! `RoutingDecision::Reject(StatusCode::ServiceUnavailable)`.
+//!
+//! ## Alias table layout (N = 4 example with weights [1, 3, 1, 3])
+//!
+//! ```text
+//!   Average weight = (1+3+1+3) / 4 = 2.
+//!
+//!   Each slot covers exactly one "average". The primary backend gets
+//!   `prob_scaled / ALIAS_SCALE` of the slot; the alias gets the rest.
+//!
+//!   table  (one entry per backend, indexed by uniform draw):
+//!
+//!   idx | primary | alias | prob_scaled (out of ALIAS_SCALE)
+//!   ----+---------+-------+--------------------------------
+//!    0  |   b0    |  b1   | 0.50  (b0 has weight 1 of avg 2)
+//!    1  |   b1    |  --   | 1.00  (b1 fully fills its slot)
+//!    2  |   b2    |  b3   | 0.50
+//!    3  |   b3    |  --   | 1.00
+//!
+//!   route():
+//!     idx       = prng() % N
+//!     fraction  = prng() & (ALIAS_SCALE - 1)
+//!     pick      = if fraction < table[idx].prob_scaled { primary } else { alias }
+//!     observed weight fractions over many calls -> [1/8, 3/8, 1/8, 3/8]
+//!     which matches the input distribution.
+//! ```
+//!
+//! ## Steady-state hot path
+//!
+//! ```text
+//!   route(req, pool, signals):
+//!     s = rng_state.fetch_xor(...)        # xorshift64* step
+//!     idx      = (s >> 32) as usize % N   # one shift, one mod
+//!     fraction = (s & 0xFFFF_FFFF) % ALIAS_SCALE
+//!     entry    = table[idx]
+//!     pick     = if fraction < entry.prob_scaled { entry.primary } else { entry.alias }
+//!     if signals[pick].circuit_state == Open:
+//!         linear scan for next Closed backend (rare path)
+//!     return Send(pick)
+//! ```
+//!
+//! No allocation, no division on the hot path beyond the modulo, no
+//! cumulative-distribution walk.
 
 use core::sync::atomic::{AtomicU64, Ordering};
 use riftgate_core::request::{Request, StatusCode};

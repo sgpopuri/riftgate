@@ -1,6 +1,54 @@
 //! [`MioIO`]: an `AsyncIO` backed by [`mio::Poll`].
 //!
 //! See the crate-level docs for the architecture overview.
+//!
+//! ## Per-shard ownership and the edge-triggered drain contract
+//!
+//! ```text
+//!  shard worker thread
+//!  -------------------
+//!  let mut io = MioIO::new()?;
+//!
+//!  io.register(listener_fd, T_LISTEN, READABLE)?;
+//!
+//!  loop {
+//!      let events = io.poll(Some(timer_until_next_deadline))?;
+//!      for ev in events {
+//!          match ev.token {
+//!              T_LISTEN => {
+//!                  // EDGE-TRIGGERED: drain accept() to EAGAIN; otherwise
+//!                  // we will not get another readable wakeup until a NEW
+//!                  // backlog edge arrives.
+//!                  while let Ok((conn, _)) = listener.accept() { handle(conn); }
+//!              }
+//!              T_CONN(id) => {
+//!                  if ev.readable { drain_read(id); }   // drain to EAGAIN
+//!                  if ev.writable { drain_write(id); }  // drain to EAGAIN or empty
+//!              }
+//!          }
+//!      }
+//!      timers.tick(now);
+//!  }
+//! ```
+//!
+//! ## Internal data layout
+//!
+//! ```text
+//!   MioIO {
+//!       poll:        mio::Poll      <-- one epoll fd (Linux) / kqueue (BSD)
+//!       events_buf:  mio::Events    <-- reused buffer; up to 1024 events / poll
+//!       registered:  HashMap<RawFd, ()>  <-- tracked so re-registration uses
+//!                                            reregister() instead of register()
+//!   }
+//!
+//!   Token mapping:  caller-supplied u64 -> mio::Token(u64 as usize)
+//!     Truncation only on 32-bit targets; binary keeps tokens < u32::MAX.
+//! ```
+//!
+//! `poll(timeout)` returns up to `EVENTS_BUF_CAPACITY` events per call. A
+//! caller that sees a full event vector should drain it before the next
+//! `poll`; otherwise events are coalesced by the kernel on subsequent
+//! wakeups (the edge-triggered contract).
 
 use mio::unix::SourceFd;
 use mio::{Events, Interest as MioInterest, Poll, Token};

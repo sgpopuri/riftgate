@@ -19,6 +19,65 @@
 //! injects synthesized signals into the downstream `route` call so the
 //! inner router naturally avoids `Open` backends. On `on_response`, the
 //! decorator updates breaker state and forwards to the inner router.
+//!
+//! ## State machine (per backend)
+//!
+//! ```text
+//!     +-----------+      N consecutive failures      +-----------+
+//!     |  Closed   | -------------------------------> |   Open    |
+//!     |  (healthy)|                                  | (rejecting)|
+//!     +-----------+                                  +-----------+
+//!          ^                                                |
+//!          |  any success                                   |  reset_timeout elapses
+//!          |                                                v
+//!          |                                         +-----------+
+//!          +---- probe success ---------------------- | Half-Open |
+//!                                                     | (probing) |
+//!     re-Open <-- probe failure ---------------------+-----------+
+//! ```
+//!
+//! ## Packed per-backend state
+//!
+//! ```text
+//!   AtomicU64:
+//!     bit  63                          32 31                          0
+//!         +------------------------------+------------------------------+
+//!         |  state_tag (u32):            |  consecutive_failures (u32)  |
+//!         |    0 = Closed                |  resets on success           |
+//!         |    1 = Open                  |                              |
+//!         |    2 = HalfOpen              |                              |
+//!         +------------------------------+------------------------------+
+//!
+//!   AtomicU64 half_open_inflight  -- probes admitted but not yet returned
+//!
+//!   Mutex<HashMap<BackendId, Instant>>  transitioned_at
+//!     -- cold: only touched on state transitions, not on hot route() calls
+//! ```
+//!
+//! ## Decorator data flow per route call
+//!
+//! ```text
+//!   inbound -> CircuitBreakerArbiter::route(req, pool, signals)
+//!                |
+//!                v
+//!   for b in pool: ensure breaker entry exists; maybe Open -> HalfOpen
+//!                |
+//!                v
+//!   build_signals: merge breaker tags into a copy of `signals`
+//!                |    (HalfOpen with inflight >= max -> presented as Open)
+//!                v
+//!   inner.route(req, pool, &merged)
+//!                |
+//!                v
+//!   if decision == Send(b): bump half_open_inflight if b is HalfOpen
+//!
+//!   later, on the upstream reply:
+//!   on_response(decision, outcome)
+//!                |
+//!                v
+//!   record_outcome -> CAS-free store of new (tag, failures) packed state
+//!                     plus optional transitioned_at update.
+//! ```
 
 use core::sync::atomic::{AtomicU64, Ordering};
 use riftgate_core::request::{Request, StatusCode};

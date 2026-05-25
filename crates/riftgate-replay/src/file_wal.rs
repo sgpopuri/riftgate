@@ -1,4 +1,60 @@
 //! `FileWal` — per-shard segment files with group-commit fdatasync.
+//!
+//! ## On-disk frame format (little-endian)
+//!
+//! ```text
+//!   offset  0   1   2   3   4   5   6 .. 13  14 .. 21  22 ........ 22+len
+//!         +---+---+---+---+---+---+---------+---------+----------------+
+//!         |    u32 length    |dur| knd| u64 timestamp_nanos | u64 entry_id | payload (length bytes) |
+//!         +---+---+---+---+---+---+---------+---------+----------------+
+//!
+//!   length              = payload byte count (excludes header)
+//!   dur (durability_tag) = 0 Async, 1 FdataSync, 2 Fsync
+//!   knd (entry_kind)     = 0 reserved for v0.2 (no schemas yet)
+//!   timestamp_nanos      = wall-clock at append (SystemTime::now)
+//!   entry_id             = monotonic across the whole WAL (process-wide)
+//!
+//!   ENTRY_HEADER_BYTES = 4 + 1 + 1 + 8 + 8 = 22 bytes per entry.
+//! ```
+//!
+//! Segment files are named `seg-{shard:04}-{seqno:020}.wal` and live
+//! under the configured `root` directory.
+//!
+//! ## Per-shard threading and synchronization
+//!
+//! ```text
+//!  producer threads (data plane)                  flusher thread (one per shard)
+//!  -----------------------------                  -------------------------------
+//!  append(bytes, dur):
+//!     entry_id = next_entry_id.fetch_add(1)
+//!     shard    = entry_id % N
+//!     lock shard.state  -----------------------> (flusher waits on cv if idle)
+//!       (maybe rollover segment)
+//!       write header + payload into BufWriter
+//!       last_buffered = entry_id
+//!       if FdataSync/Fsync or buffer over threshold:
+//!           cv.notify_all
+//!       if Async:
+//!         drop lock; return entry_id  ---->     loop {
+//!       else:                                      wait_timeout(cv, flush_interval)
+//!         while last_durable < entry_id:           do_flush(shard):
+//!             cv.wait(lock)  <- parks here ---       lock shard.state
+//!         drop lock; return entry_id                writer.flush()
+//!                                                   file.sync_data()       <-- fdatasync
+//!                                                   drop lock
+//!                                                 lock shard.state
+//!                                                 last_durable = target
+//!                                                 cv.notify_all  -----> wakes parked appenders
+//!                                               }
+//!
+//!  Shutdown: each shard.state.shutdown = true; cv.notify_all.
+//!  Flusher drains remaining buffered entries, then exits.
+//!  Joined in FileWal::shutdown / Drop.
+//! ```
+//!
+//! Sharding is by `entry_id % shards`, so producers are striped across
+//! shards in round-robin order. Each shard owns its own segment file
+//! series and its own flusher thread; there is no cross-shard locking.
 
 use riftgate_core::wal::{Durability, WAL, WalEntryId};
 use std::fs::{File, OpenOptions};
