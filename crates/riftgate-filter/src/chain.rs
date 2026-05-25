@@ -1,4 +1,40 @@
 //! Native filter-chain executor.
+//!
+//! Per [ADR 0019](../../../../docs/06-adrs/0019-wasm-extension-mechanism.md)
+//! and [Options 016](../../../../docs/05-options/016-extension-mechanism.md):
+//!
+//! - Runs filters in configured order on the request side.
+//! - Runs filters in reverse order on the response side.
+//! - Short-circuits immediately when any filter returns
+//!   `FilterAction::Terminate(status)`.
+//!
+//! This mirrors the canonical proxy chain shape used by Envoy and Linkerd
+//! and keeps the core trait (`riftgate_core::Filter`) stable while
+//! allowing the implementation to be swapped (native chain in v0.3,
+//! `WasmFilter` host in follow-on work).
+//!
+//! ## Request/response traversal
+//!
+//! ```text
+//!   inbound request:
+//!     f0.on_request -> f1.on_request -> ... -> fN.on_request
+//!         |                 |                     |
+//!         +-- if any returns Terminate, stop and return status immediately
+//!
+//!   outbound response:
+//!     fN.on_response -> ... -> f1.on_response -> f0.on_response
+//!         |                                   |
+//!         +-- same short-circuit rule on Terminate
+//! ```
+//!
+//! ## Hot-path properties
+//!
+//! ```text
+//!   Storage: Vec<Arc<dyn Filter>> (immutable in steady-state)
+//!   Request path: O(N) virtual calls, no allocations
+//!   Response path: O(N) virtual calls, no allocations
+//!   Reconfiguration: rebuild chain at config reload time
+//! ```
 
 use riftgate_core::{Filter, FilterAction, Request, Response};
 use std::sync::Arc;
@@ -179,9 +215,8 @@ mod tests {
         let mut resp = dummy_response();
         let _ = chain.on_request(&mut req);
         let _ = chain.on_response(&mut resp);
-        // Each tracer logs into its own buffer; the response-side traversal
-        // calls them in reverse order, so t2 logs its response visit first
-        // and t1 second. Concatenating both buffers gives the full path.
+        // Each tracer logs into its own buffer. In this setup each tracer is
+        // visited once on request and once on response.
         let req_visits: Vec<&'static str> = t1.log.lock().unwrap().to_vec();
         assert_eq!(req_visits, vec!["t1", "t1"]); // on_request then on_response
         let req_visits2: Vec<&'static str> = t2.log.lock().unwrap().to_vec();

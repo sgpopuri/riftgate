@@ -18,6 +18,29 @@
 //! The actual fan-out (dispatching both backends, racing them, cancelling
 //! the loser) lives in the request driver (`crates/riftgate/src/proxy.rs`,
 //! deferred to a follow-on Phase B PR). The router is the policy seam.
+//!
+//! ## Decision flow
+//!
+//! ```text
+//!   route(req, pool, signals):
+//!     primary_decision = inner.route(...)
+//!     if primary_decision is not Send(primary):
+//!       return primary_decision
+//!
+//!     q = p95_estimator[primary]
+//!     if estimator not warmed up:
+//!       return Send(primary)
+//!     if q < hedge_min_threshold_ms:
+//!       return Send(primary)
+//!     if hedge_budget_exhausted:
+//!       return Send(primary)
+//!
+//!     secondary = first Closed backend != primary
+//!     if secondary exists:
+//!       return Hedge([primary, secondary])
+//!     else:
+//!       return Send(primary)
+//! ```
 
 use core::sync::atomic::{AtomicU64, Ordering};
 use riftgate_core::request::Request;
