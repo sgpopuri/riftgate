@@ -4,9 +4,9 @@
 //! and [ADR `0026`](../../../docs/06-adrs/0026-gpu-pressure-via-dcgm-exporter.md):
 //!
 //! - Riftgate models per-backend GPU pressure as a *signal* that the router
-//!   can fold into its decision. The default [`Router::route`] consumer is
-//!   [`crate::router::BackendSignals::gpu_pressure`], which the v0.4 routing
-//!   crate populates from the trait below.
+//!   can fold into its decision. The default consumer is the per-backend
+//!   `BackendSignal.gpu_pressure` field populated by the v0.4 routing crate
+//!   from the trait below.
 //! - Two impls ship in `crates/riftgate-obs`:
 //!   - `DcgmScrapeSource` — scrapes the NVIDIA `dcgm-exporter` Prometheus
 //!     endpoint at operator-configured cadence (default 5 s). Default for

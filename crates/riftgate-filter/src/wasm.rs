@@ -96,11 +96,12 @@ impl WasmFilter {
         Self { cfg }
     }
 
-    /// The production constructor. Errors with [`WasmFilterError::BackendNotWired`]
+    /// The production constructor. Errors with
+    /// `WasmFilterError::BackendNotWired`
     /// until the wasmtime backend lands in the follow-on Phase B PR.
     ///
     /// # Errors
-    /// See [`WasmFilterError`].
+    /// See `WasmFilterError`.
     pub fn try_load(_cfg: WasmFilterConfig) -> Result<Self, WasmFilterError> {
         Err(WasmFilterError::BackendNotWired)
     }

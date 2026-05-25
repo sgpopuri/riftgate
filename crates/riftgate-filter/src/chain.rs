@@ -87,8 +87,8 @@ impl Filter for FilterChain {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use riftgate_core::{Body, Headers, IdentityFilter, LoggingFilter, Method, StatusCode};
     use riftgate_core::types::RequestId;
+    use riftgate_core::{Body, Headers, IdentityFilter, LoggingFilter, Method, StatusCode};
 
     fn dummy_request() -> Request {
         Request {
@@ -119,17 +119,11 @@ mod tests {
 
     impl Filter for Tracer {
         fn on_request(&self, _req: &mut Request) -> FilterAction {
-            self.log
-                .lock()
-                .expect("tracer log")
-                .push(self.label);
+            self.log.lock().expect("tracer log").push(self.label);
             FilterAction::Continue
         }
         fn on_response(&self, _resp: &mut Response) -> FilterAction {
-            self.log
-                .lock()
-                .expect("tracer log")
-                .push(self.label);
+            self.log.lock().expect("tracer log").push(self.label);
             FilterAction::Continue
         }
     }

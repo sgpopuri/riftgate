@@ -98,15 +98,10 @@ impl P2Estimator {
             self.count += 1;
             if self.count == 5 {
                 // Sort initial heights.
-                self.q.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                self.q
+                    .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 self.n = [0.0, 1.0, 2.0, 3.0, 4.0];
-                self.n_prime = [
-                    0.0,
-                    2.0 * self.p,
-                    4.0 * self.p,
-                    2.0 + 2.0 * self.p,
-                    4.0,
-                ];
+                self.n_prime = [0.0, 2.0 * self.p, 4.0 * self.p, 2.0 + 2.0 * self.p, 4.0];
             }
             return;
         }
@@ -119,7 +114,9 @@ impl P2Estimator {
             self.q[4] = x;
             3
         } else {
-            (0..4).find(|&i| self.q[i] <= x && x < self.q[i + 1]).unwrap_or(3)
+            (0..4)
+                .find(|&i| self.q[i] <= x && x < self.q[i + 1])
+                .unwrap_or(3)
         };
 
         // Increment positions of markers k+1..4.
@@ -140,8 +137,7 @@ impl P2Estimator {
                 // Parabolic prediction.
                 let qp = self.q[i]
                     + dsign / (self.n[i + 1] - self.n[i - 1])
-                        * ((self.n[i] - self.n[i - 1] + dsign) * (self.q[i + 1] - self.q[i])
-                            / np
+                        * ((self.n[i] - self.n[i - 1] + dsign) * (self.q[i + 1] - self.q[i]) / np
                             + (self.n[i + 1] - self.n[i] - dsign) * (self.q[i] - self.q[i - 1])
                                 / nm);
                 let new_q = if (self.q[i - 1] < qp) && (qp < self.q[i + 1]) {
@@ -150,8 +146,7 @@ impl P2Estimator {
                     // Linear fallback.
                     let neighbour = if dsign > 0.0 { i + 1 } else { i - 1 };
                     self.q[i]
-                        + dsign * (self.q[neighbour] - self.q[i])
-                            / (self.n[neighbour] - self.n[i])
+                        + dsign * (self.q[neighbour] - self.q[i]) / (self.n[neighbour] - self.n[i])
                 };
                 self.q[i] = new_q;
                 self.n[i] += dsign;
@@ -162,7 +157,11 @@ impl P2Estimator {
     }
 
     fn quantile(&self) -> Option<f64> {
-        if self.count < 5 { None } else { Some(self.q[2]) }
+        if self.count < 5 {
+            None
+        } else {
+            Some(self.q[2])
+        }
     }
 
     fn count(&self) -> u32 {

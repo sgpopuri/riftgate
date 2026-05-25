@@ -198,11 +198,7 @@ impl StreamParser for SseFramer {
 
 /// Helper for the cancellation-gate early return: consume the emit
 /// vector, ignoring any borrowed ranges (the gate only emits `Cancelled`).
-fn finalize(
-    _output_buffer: &mut Vec<u8>,
-    emit: Vec<Emit>,
-    bytes_seen: u64,
-) -> Vec<ParseEvent<'_>> {
+fn finalize(_output_buffer: &mut Vec<u8>, emit: Vec<Emit>, bytes_seen: u64) -> Vec<ParseEvent<'_>> {
     emit.into_iter()
         .map(|i| match i {
             Emit::Cancelled(c) => ParseEvent::Cancelled {
