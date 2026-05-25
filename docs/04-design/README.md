@@ -11,6 +11,7 @@ One LLD per subsystem. Each LLD is the operating theory of that subsystem: trait
 | Allocator | [`lld-allocator.md`](lld-allocator.md) | `crates/riftgate-core` |
 | Timers | [`lld-timers.md`](lld-timers.md) | `crates/riftgate-core` |
 | Routing | [`lld-routing.md`](lld-routing.md) | `crates/riftgate-router` |
+| Filter chain | [`lld-filter-chain.md`](lld-filter-chain.md) | `crates/riftgate-filter` (v0.3) |
 | Observability | [`lld-observability.md`](lld-observability.md) | `crates/riftgate-obs` |
 | Rate limiting | [`lld-rate-limiter.md`](lld-rate-limiter.md) | `crates/riftgate-core` (v0.2 default impl) |
 | MCP capability | [`lld-mcp-capability.md`](lld-mcp-capability.md) | `crates/riftgate-mcp` (v0.5) |

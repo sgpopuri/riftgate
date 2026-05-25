@@ -34,19 +34,21 @@ This is the moat. Read a few entries to get the project's flavor before contribu
 | 011 | [circuit breaker](011-circuit-breaker.md) | recommended | [0016](../06-adrs/0016-three-state-circuit-breaker.md) | resilience patterns (Nygard *Release It*), sliding-window failure-rate (Hystrix), FSM-based protection primitives |
 | 012 | [backpressure policy](012-backpressure.md) | recommended | [0017](../06-adrs/0017-drop-newest-503-backpressure.md) | backpressure as policy, drop-on-full ring buffers (LMAX Disruptor), Little's law, AIMD admission control |
 | 013 | [observability sink](013-observability-sink.md) | recommended | [0011](../06-adrs/0011-otel-default-sink-multisink-fanout.md) | OpenTelemetry / OTLP, Prometheus exposition format, bounded ring-buffer drop-on-full (LMAX Disruptor lineage), eBPF (later) |
-| 014 | eBPF integration | TBD | TBD | eBPF (Aya, libbpf, bpftrace) |
+| 014 | [eBPF integration](014-ebpf-integration.md) | recommended | [0024](../06-adrs/0024-ebpf-via-aya.md) | eBPF (Aya, libbpf, bpftrace), CO-RE, kprobes / tracepoints, continuous profiling |
 | 015 | [configuration model](015-config-model.md) | recommended | [0012](../06-adrs/0012-static-toml-env-override-v01.md) | layered configuration (defaults → file → env), twelve-factor configuration, `serde` + `toml`, file-watch hot reload (`inotify` / `kevent` `EVFILT_VNODE`), Kubernetes CRDs |
-| 016 | extension mechanism | TBD | TBD | sandboxed extension surfaces (WASM via wasmtime) |
+| 016 | [extension mechanism](016-extension-mechanism.md) | recommended | [0019](../06-adrs/0019-wasm-extension-mechanism.md) | sandboxed extension surfaces (WASM via wasmtime), Component Model, capability-based security |
 | 017 | multitenancy | TBD | TBD | tenant-isolation patterns |
 | 018 | deployment | TBD | TBD | sidecar / ambassador deployment patterns |
-| 019 | replay-eval | TBD | TBD | streaming sketches, write-ahead logging |
+| 019 | [replay-eval](019-replay-eval.md) | recommended | [0021](../06-adrs/0021-external-replay-cli.md) | write-ahead logging as eval corpus, declarative graders, telemetry tagging (`riftgate.run.kind`) |
 | 020 | language (Rust vs Zig) | TBD | [0001](../06-adrs/0001-rust-not-go-or-zig.md) | — |
 | 021 | [rate-limiting](021-rate-limiting.md) | accepted | [0009](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (accepted), [0018](../06-adrs/0018-token-bucket-parameters.md) | rate-limiting algorithms (token bucket, GCRA), consistent hashing (future distributed), priority heaps (priority under pressure), lock-free structures |
 | 022 | fairness-scheduling (optional; decide at `v0.2` retro) | TBD | TBD | work-stealing, priority heaps |
 | 023 | [token-bucket-parameters](023-token-bucket-parameters.md) | recommended | [0018](../06-adrs/0018-token-bucket-parameters.md) | packed atomic state (Vyukov-style CAS), sharded hash maps, fixed-point arithmetic |
+| 024 | [stream cancellation](024-stream-cancellation.md) | recommended | [0020](../06-adrs/0020-stream-cancellation-cancellation-token.md) | cooperative cancellation, `tokio_util::sync::CancellationToken`, typed `CancelCause`, parent/child cascade |
+| 025 | [v0.3 routing strategies](025-v03-routing-strategies.md) | recommended | [0022](../06-adrs/0022-kv-aware-routing-prefix-trie.md), [0023](../06-adrs/0023-hedged-requests-p99-triggered.md) | prefix trie (Knuth TAOCP §6.3), xxHash3-64, Dean–Barroso threshold-triggered hedge, P² quantile estimator |
 | 026 | [mcp-orchestration](026-mcp-orchestration.md) | recommended | [0015](../06-adrs/0015-mcp-extension-plane-broker.md) (proposed) | ambassador pattern, capability-based security, allowlist data structures (tries, bit-sets), topological sort over DAGs, write-ahead logging for audit |
-| 027 | upstream-protocols-http2-grpc (optional; deepens 008) | TBD | — | FSM-based parsing |
-| 028 | token-accounting (optional; folds into filter starter library) | TBD | — | — |
+| 027 | [token-level metrics](027-token-level-metrics.md) | recommended | [0025](../06-adrs/0025-token-level-metrics-probabilistic.md) | streaming sketches (Cormode–Muthukrishnan CMS, Flajolet HLL, Vitter reservoir), HDR histograms, head-vs-tail sampling, WAL-vs-OTel split |
+| 028 | [gpu-pressure correlation](028-gpu-pressure-correlation.md) | recommended | [0026](../06-adrs/0026-gpu-pressure-via-dcgm-exporter.md) | DCGM exporter Prometheus scrape, NVML in-process FFI, ambassador / sidecar deployment patterns, multi-vendor GPU telemetry |
 | 029 | async-telemetry-pipeline (optional; deepens 013) | TBD | — | pub/sub messaging, streaming sketches |
 
 This index is updated whenever a new Options doc lands or an existing one changes status. Stale entries are a documentation bug; please open a PR.

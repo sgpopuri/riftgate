@@ -16,26 +16,34 @@ Tag pushes may run release **build + test** workflows; they do not publish to cr
 
 > _**Project context (read every session):**_
 >
-> - **Active milestone:** `v0.3` prep — perf-stabilization sweep, headline benchmarks, `PerShardScheduler` binary cutover, `io_uring` conformance harness lift.
-> - **Recently shipped (`v0.2` the systems showpiece, tagged at this commit):** five new Options docs ([`009`](05-options/009-request-log.md), [`010`](05-options/010-routing-strategy.md), [`011`](05-options/011-circuit-breaker.md), [`012`](05-options/012-backpressure.md), [`023`](05-options/023-token-bucket-parameters.md)); five new accepted ADRs ([`0013`](06-adrs/0013-append-only-file-wal.md), [`0014`](06-adrs/0014-weighted-random-router.md), [`0016`](06-adrs/0016-three-state-circuit-breaker.md), [`0017`](06-adrs/0017-drop-newest-503-backpressure.md), [`0018`](06-adrs/0018-token-bucket-parameters.md)); [ADR `0009`](06-adrs/0009-rate-limiter-trait-in-proc-only.md) promoted to `accepted`; four LLDs refreshed. New code: `MpmcQueue` + `ShardedMpmcQueue` + `PerShardScheduler` in `crates/riftgate`; `TokenBucketLimiter` + `NoopLimiter` in `crates/riftgate-core`; `WeightedRandomRouter` + `CircuitBreakerArbiter` in `crates/riftgate-router`; `BackpressurePolicy` trait + `HighWaterPolicy` + `DenialReason` in `crates/riftgate-core`; new crate `crates/riftgate-replay` with `FileWal` implementing `riftgate_core::wal::WAL` per ADR `0013`; new crate `crates/riftgate-io-uring` (Linux + `--features io-uring`, empty-lib elsewhere). The full close-out narrative lives in the [`v0.2` retrospective](02c-v0.2-retrospective.md).
-> - **In flight (`v0.3` Phase 1 — perf-sweep scoping):**
->   - Draft Options docs for the four bench targets (`scheduler`, `rate_limit`, `routing`, `wal`) under `benchmarks/v0.2-headline/`.
->   - Lift `crates/riftgate-io-epoll/tests/conformance.rs` into a shared `AsyncIO` conformance harness imported by both `riftgate-io-epoll` and `riftgate-io-uring`.
->   - `PerShardScheduler` binary cutover behind `--features per-core-scheduler`; compare against the tokio multi-thread baseline.
-> - **Upcoming (`v0.3` Phase 2+):**
->   - Headline benchmarks vs LiteLLM and one published Rust gateway (per AGENTS.md §5 reproducibility contract).
->   - `BumpArena` pooling decision (per-shard vs shared) once measured under sustained load.
->   - `HierarchicalWheel` cutover decision per [ADR `0010`](06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md), gated on the timer microbenchmark crossing a documented threshold.
-> - **Open questions (carried forward from `v0.2` close-out):**
->   - Domain availability for `riftgate.io` / `riftgate.dev` / `riftgate.com` — still not reserved. Now two milestones overdue.
->   - `BumpArena` pooling shape — per-shard or shared. v0.3 decides under measurement.
->   - `HierarchicalWheel` cutover threshold — schedule/cancel/tick ops/sec above which the binary-heap impl is no longer acceptable.
->   - Options `022` (priority / fairness scheduling) — v0.3 retro decides whether to commission the Options doc.
->   - eBPF library choice (Options `014`: bpftrace vs libbpf vs Aya) — explicitly v0.4 work; no v0.3 blocker.
-> - **Recent learnings (the `v0.2` retrospective is the canonical surface):**
->   - Packed-`AtomicU64`-with-CAS-loop is now a documented v0.2 idiom — used by both `TokenBucketLimiter` (tokens mantissa + epoch ms) and `CircuitBreakerArbiter` (state tag + failure count). Document it in the next refresh of `lld-rate-limiter` and `lld-routing`.
->   - Empty-on-non-Linux crate compile works cleanly by combining `target.'cfg(target_os = "linux")'.dependencies` with `cfg(all(target_os = "linux", feature = "..."))` gates on every module. Reusable pattern for future Linux-only backends.
->   - Vose's alias method (1991) was the right choice for `WeightedRandomRouter` — O(1) per pick, O(N) one-time setup, fits the v0.2 32-backend ceiling comfortably.
+> - **Active milestone:** `v0.3` Phase 2 — Programmability (implementation in flight). `v0.4` Phase C — eBPF and the depths (documentation complete at this commit). The combined `v0.3 + v0.4` plan progresses through Phase A (`v0.3` docs, done) → Phase C (`v0.4` docs, done) → Phase B (`v0.3` code, in flight) → Phase D (`v0.4` code, queued) → Phase E close-out.
+> - **Recently shipped (`v0.4` Phase C — documentation):** three new Options docs ([`014` eBPF integration](05-options/014-ebpf-integration.md), [`027` token-level metrics](05-options/027-token-level-metrics.md), [`028` GPU pressure correlation](05-options/028-gpu-pressure-correlation.md)); three new accepted ADRs ([`0024` eBPF via Aya](06-adrs/0024-ebpf-via-aya.md), [`0025` token-level metrics](06-adrs/0025-token-level-metrics-probabilistic.md), [`0026` GPU pressure via DCGM exporter](06-adrs/0026-gpu-pressure-via-dcgm-exporter.md)); [`lld-observability.md`](04-design/lld-observability.md) refreshed to promote `BpfSink`, `TokenLevelAggregator`, `DcgmScrapeSource`, `NvmlSource`, `NoopGpuSource` from "v0.4 reserved" to "v0.4 designed"; glossary additions for CMS, HDR histogram, HLL, kprobe, tracepoint, MIG, NVML, reservoir sampling. The §5 invariant ("no code without a corresponding Options doc and ADR") is now satisfied for every `v0.4` surface.
+> - **Recently shipped (`v0.3` Phase A — documentation, this same commit cycle):** four new Options docs ([`016`](05-options/016-extension-mechanism.md), [`019`](05-options/019-replay-eval.md), [`024`](05-options/024-stream-cancellation.md), [`025`](05-options/025-v03-routing-strategies.md)); five new accepted ADRs ([`0019`](06-adrs/0019-wasm-extension-mechanism.md), [`0020`](06-adrs/0020-stream-cancellation-cancellation-token.md), [`0021`](06-adrs/0021-external-replay-cli.md), [`0022`](06-adrs/0022-kv-aware-routing-prefix-trie.md), [`0023`](06-adrs/0023-hedged-requests-p99-triggered.md)); new LLD [`lld-filter-chain.md`](04-design/lld-filter-chain.md); refresh of [`lld-routing.md`](04-design/lld-routing.md).
+> - **Recently shipped (`v0.2` the systems showpiece, tagged 2026-05-25):** see the [`v0.2` retrospective](02c-v0.2-retrospective.md) for the full close-out narrative.
+> - **In flight (`v0.3` Phase B — implementation):**
+>   - New crate `crates/riftgate-filter` (`FilterChain` executor + `WasmFilter` impl over frozen `riftgate:filter/v1` component-model ABI, wasmtime instance-pooled + AOT-precompiled).
+>   - `KvAwareRouter<R>` and `HedgedRouter<R>` in `crates/riftgate-router` as decorator-shaped impls.
+>   - `crates/riftgate-core::cancel` (`Cancellation` + `CancellationDriver` newtype around `tokio_util::sync::CancellationToken`; typed `CancelCause`); SSE framer `Cancelled` terminal state.
+>   - `riftgate-replay` `[[bin]]` target with `dump`, `replay`, `eval` subcommands.
+>   - Starter filter library under `examples/02-starter-filters/`.
+> - **Upcoming (`v0.4` Phase D — implementation, queued after Phase B):**
+>   - New module `crates/riftgate-obs/src/bpf/` and sibling crate `crates/riftgate-obs-bpf` (`bpfel-unknown-none` target) gated `cfg(all(target_os = "linux", feature = "bpf"))`; three Aya programs (CPU on/off-time profiling, syscall stalls, TCP retransmits per upstream); `BpfSink` impl of the existing `ObservabilitySink` trait.
+>   - `crates/riftgate-obs/src/token_level/` housing `TokenLevelAggregator`: per-`(tenant, model, route)` HDR histograms, Vitter Algorithm R reservoir (default `K=100`, 60 s window), per-token WAL `TokenEvent` records, bounded dimension cap (default 10 000) with `(other, other, other)` fallback.
+>   - New trait `GpuPressureSource` in `crates/riftgate-core/src/gpu.rs`; `DcgmScrapeSource` (default, in `crates/riftgate-obs/src/gpu/dcgm.rs`) and `NvmlSource` (feature-gated `gpu-nvml`, in `crates/riftgate-obs/src/gpu/nvml.rs`); `NoopGpuSource` as the default when no `gpu_pressure_source` block is configured.
+>   - `RIFTGATE_ENABLE_BPF=1` startup gate documented in [`RUNBOOK.md`](../RUNBOOK.md); `CAP_BPF` required.
+> - **Open questions (carried forward + v0.4-specific):**
+>   - Domain availability for `riftgate.io` / `riftgate.dev` / `riftgate.com` — still not reserved.
+>   - `BumpArena` pooling shape — per-shard or shared. Re-evaluate post-`v0.3` under sustained load with the new filter dispatch path.
+>   - `HierarchicalWheel` cutover threshold — unchanged from `v0.2`.
+>   - BPF-sourced byte-egress timestamps via `bpf-token-timestamps` feature for sub-millisecond inter-token-latency precision — `v0.4` ships userspace `Instant::now()` as the default; BPF path is an additive impl behind the same aggregator trait.
+>   - Multi-vendor GPU telemetry beyond Prometheus scrape (AMD ROCm native, Habana, Inferentia) — `v0.4` works via DCGM-exporter-compatible scrape against AMD ROCm SMI exporter; native vendor-specific `GpuPressureSource` impls become clean `v1.0+` additions behind the same trait.
+>   - Sidecar option ([Options `028` §3.3](05-options/028-gpu-pressure-correlation.md)) deferred to `v1.0+` as the long-term multi-vendor strategy.
+>   - CMS heavy-hitters extension ([Options `027` §3.5](05-options/027-token-level-metrics.md)) deferred to `v1.0` unless operator demand surfaces at `v0.4` close-out.
+> - **Recent learnings (`v0.4` Phase C close-out):**
+>   - Match-substrate-to-question is the load-bearing discipline for `v0.4` observability: HDR for aggregate latency, reservoir for forensic sampling, WAL for per-request replay. Three substrates each pulling their weight beats one substrate over-stretched.
+>   - Reservoir sampling preserves rare slow tails; rate sampling discards them. The latter is fine for the request-root span (where the population is dense and uniform), wrong for token sub-spans (where slow streams *are* the population of interest).
+>   - DCGM-scrape-versus-NVML-FFI is fundamentally a topology question, not a performance question. Riftgate-on-LB topology wants scrape; Riftgate-co-located-with-GPU topology wants FFI. The trait surface absorbs the difference without `BackendSignals` schema change.
+>   - "Integrated, not bolted-on" is a structural claim that depends on the BPF runtime being in-process. Aya delivers; bolted-on alternatives (`bpftrace`, sidecars) would forfeit the differentiation pillar even though they're operationally simpler.
 >
 > _Update this section in every session that ships meaningful progress. This is the live project-context surface for the context harness defined in [`AGENTS.md`](../AGENTS.md)._
 

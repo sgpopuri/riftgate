@@ -2,7 +2,7 @@
 
 > Backend selection: which backend gets which request. Pluggable strategies behind a single trait.
 >
-> Status: **shipped (v0.1, RoundRobin + ConstantRouter); v0.2 adds WeightedRandomRouter and the CircuitBreakerArbiter decorator.** KV-aware and hedged routers are explicitly deferred to v0.3 per [Options `010`](../05-options/010-routing-strategy.md) and [ADR `0014`](../06-adrs/0014-weighted-random-router.md).
+> Status: **shipped (v0.1, RoundRobin + ConstantRouter); v0.2 adds WeightedRandomRouter and the CircuitBreakerArbiter decorator; v0.3 adds `KvAwareRouter` and `HedgedRouter` as decorator-shaped routers stacking on top of the v0.2 baseline.** v0.3 routing-strategy decisions in [Options `025`](../05-options/025-v03-routing-strategies.md), [ADR `0022`](../06-adrs/0022-kv-aware-routing-prefix-trie.md) (KV-aware), and [ADR `0023`](../06-adrs/0023-hedged-requests-p99-triggered.md) (hedged). The v0.2 baseline decision lives in [Options `010`](../05-options/010-routing-strategy.md) and [ADR `0014`](../06-adrs/0014-weighted-random-router.md).
 
 ## Purpose
 
@@ -46,8 +46,8 @@ The trait is `Send + Sync` (unlike `AsyncIO` and `TimerSubsystem`) because a sin
 | `ConstantRouter` | shipped (v0.1) | `riftgate-router` | Always returns `Send(backend_id)`. Used as a test harness so other crates can verify routing-agnostic behavior. |
 | `WeightedRandomRouter` | **v0.2** | `riftgate-router` | Walker alias method (Vose 1991); O(1) sampling regardless of weight distribution; alias table rebuilt at config-load and config-reload. Capped at N = 32 eligible backends in v0.2. Per [ADR `0014`](../06-adrs/0014-weighted-random-router.md). |
 | `CircuitBreakerArbiter<R>` | **v0.2** | `riftgate-router` | Decorator over any `Router` impl; filters `CircuitState::Open` backends out of the eligible set before delegating selection. Per [ADR `0016`](../06-adrs/0016-three-state-circuit-breaker.md). |
-| `KvAwareRouter` | deferred to v0.3 | `riftgate-router` | Integrates with `vllm-router` LMCache or uses an internal prefix trie; paired with the v0.3 WASM extension surface. |
-| `HedgedRouter` | deferred to v0.3 | `riftgate-router` | Wraps any inner router; emits `Hedge(...)` decisions; requires v0.3 stream-cancellation primitives. |
+| `KvAwareRouter<R>` | **v0.3** | `riftgate-router` | Decorator over inner `Router`; in-tree prefix trie keyed by chunked xxHash3-64 byte-hashes; LRU-bounded entry count; `prefix_normalisation = "trim_trailing_whitespace"` default; falls back to the inner router when the trie misses or names an Open backend. Per [ADR `0022`](../06-adrs/0022-kv-aware-routing-prefix-trie.md). LMCache delegation catalogued and deferred. |
+| `HedgedRouter<R>` | **v0.3** | `riftgate-router` | Decorator over inner `Router`; Dean–Barroso threshold-triggered hedge, degree=2, per-backend P²-estimator for first-byte p95 latency, global `hedge_max_fraction` budget (default 0.05); loser cancelled via the v0.3 cancellation primitive ([ADR `0020`](../06-adrs/0020-stream-cancellation-cancellation-token.md)). Per [ADR `0023`](../06-adrs/0023-hedged-requests-p99-triggered.md). |
 
 Decision rationale: [Options `010` (routing strategy)](../05-options/010-routing-strategy.md), [ADR `0014`](../06-adrs/0014-weighted-random-router.md), and (for the breaker decorator) [Options `011`](../05-options/011-circuit-breaker.md) + [ADR `0016`](../06-adrs/0016-three-state-circuit-breaker.md).
 
@@ -68,9 +68,9 @@ The router does **not** dispatch the request itself — it returns a decision; t
 
 ### Pitfalls
 
-- **KV-aware routing requires tokenization.** If the gateway tokenizes, we add latency on the hot path. If we delegate to the backend, we need a fast tokenize endpoint. See [Options 010](../05-options/010-routing-strategy.md).
-- **Hedged requests double upstream load** in steady state. Use only on tail-latency-sensitive routes.
-- **Stream cancellation is non-trivial** when both backends are streaming. The router emits a cancellation signal; the scheduler ensures the slower one gets `connection: close` mid-stream.
+- **KV-aware routing trades tokenizer accuracy for hot-path latency.** v0.3 hashes raw bytes (xxHash3-64, chunked at 64 bytes per trie level) rather than tokenizing on the routing path — a tokenizer call exceeds the 50µs `NFR-P11` budget. The trade gives up a few percentage points of hit-rate on tokenizer-divergent inputs in exchange for staying inside the hot-path budget. Documented in [Options `025` §3.A.1](../05-options/025-v03-routing-strategies.md) and [ADR `0022`](../06-adrs/0022-kv-aware-routing-prefix-trie.md). LMCache delegation remains catalogued for a future impl if operator demand surfaces.
+- **Hedged requests amplify upstream load** in proportion to the trigger frequency. v0.3 caps amplification at `hedge_max_fraction = 0.05` (≤ 5% of traffic) globally; per-tenant budgets are deferred until multitenancy lands. Telemetry (`hedge.fired`, `hedge.budget_blocked`, `hedge.bytes_wasted_total`) provides the data needed to tune the trigger threshold over time — see [ADR `0023`](../06-adrs/0023-hedged-requests-p99-triggered.md).
+- **Stream cancellation is non-trivial** when both backends are streaming. v0.3 resolves the contract via the `Cancellation` newtype around `tokio_util::sync::CancellationToken` (per [Options `024`](../05-options/024-stream-cancellation.md), [ADR `0020`](../06-adrs/0020-stream-cancellation-cancellation-token.md)): the request driver fans out, sets a timer at `primary.p95_first_byte_ms`, dispatches the secondary only if the timer fires before the primary's first byte arrives, and cancels the loser via `Cancellation::cancel(CancelCause::HedgedLoser { winner })`. The SSE framer's `Cancelled` terminal state triggers `connection: close` on HTTP/1.1 (and `RST_STREAM CANCEL` on HTTP/2 in v0.4+).
 - **Sticky sessions** (consistent-hash routing for chat-style multi-turn) are a router concern; the request must carry a session ID. Cookie-based stickiness: out of scope.
 
 ### Standards and review gates
@@ -88,9 +88,13 @@ The router does **not** dispatch the request itself — it returns a decision; t
 
 ## Open questions
 
-- Should we support session-affinity routing as a built-in? Recommend yes; sticky to a backend by `X-Session-Id` header.
-- Should hedging be model-aware (e.g. don't hedge GPT-4 calls because of cost)? Recommend yes; per-route configuration.
-- How do we surface "this routing decision was hedged" to OTel? Recommend a span attribute `riftgate.router.hedged = true` and a `riftgate.router.hedge_winner` attribute.
+- Should we support session-affinity routing as a built-in? Recommend yes; sticky to a backend by `X-Session-Id` header. Deferred to a future minor.
+- Should hedging be model-aware (e.g. don't hedge GPT-4 calls because of cost)? Recommend yes; per-route configuration. The v0.3 chain supports per-route disable; per-route enable-with-different-budget is a future option.
+- Cross-replica KV-aware consistency. Two Riftgate replicas behind an L4 LB have independent prefix tries in v0.3. Operators wanting cross-replica consistency front Riftgate with a prefix-aware L4 LB or wait for a future LMCache-delegated impl.
+- Tokenizer-accurate KV routing as a v1.0+ option with measurement-driven justification.
+- Streaming-aware hedge trigger. v0.3 triggers on first-byte latency; some workloads have fast TTFB but slow full-response. A v0.4+ trigger could observe an in-flight token rate and fire a hedge mid-stream. Documented as a future enhancement.
+
+OTel surfacing for hedged decisions is now established: `riftgate.router.hedged = true`, `riftgate.router.hedge_winner = <backend_id>`, `riftgate.router.hedge_bytes_wasted = <n>` on the parent request span, and `riftgate.cancel.cause = "HedgedLoser"` on the cancelled child span (per [ADR `0020`](../06-adrs/0020-stream-cancellation-cancellation-token.md)).
 
 ## Data structures worth citing
 

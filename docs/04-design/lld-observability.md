@@ -2,7 +2,7 @@
 
 > OTel traces, Prometheus metrics, eBPF profiles, and the token-level SLO aggregator. The observability plane in detail.
 >
-> Status: **shipped (v0.1, OTel + JSON over a bounded MPSC bus)**. Prometheus, eBPF profiles, and token-level SLOs land in v0.2 / v0.4 behind the same trait.
+> Status: **shipped (v0.1, OTel + JSON over a bounded MPSC bus); v0.2 adds Prometheus; v0.4 adds `BpfSink`, `TokenLevelAggregator`, and the `GpuPressureSource` trait behind the same observability trait surface.** v0.4 decisions in [Options `014`](../05-options/014-ebpf-integration.md), [Options `027`](../05-options/027-token-level-metrics.md), [Options `028`](../05-options/028-gpu-pressure-correlation.md); ADRs [`0024`](../06-adrs/0024-ebpf-via-aya.md), [`0025`](../06-adrs/0025-token-level-metrics-probabilistic.md), [`0026`](../06-adrs/0026-gpu-pressure-via-dcgm-exporter.md).
 
 ## Purpose
 
@@ -38,10 +38,13 @@ The `Profile` variant in the v0.0 sketch was removed from the trait; eBPF profil
 | `MultiSink` | shipped (v0.1) | `riftgate-obs` | Fan-out wrapper: `MultiSink::new(vec![otel, json])` publishes to both. |
 | `InMemorySink` | shipped (v0.1) | `riftgate-core` | Test-only sink that buffers events in a `Mutex<Vec<...>>` for assertions. |
 | `PrometheusSink` | v0.2 | `riftgate-obs` | `/metrics` HTTP endpoint. |
-| `BpfSink` | v0.4 | `riftgate-obs` | Aya-based BPF programs publish into the same channel. |
-| `TokenLevelAggregator` | v0.4 | `riftgate-obs` | TTFT, inter-token latency, jitter histograms. |
+| `BpfSink` | **v0.4** | `riftgate-obs` | Aya-based pure-Rust BPF programs (CPU on/off-time profiling, syscall stalls, TCP retransmits per upstream) loaded behind `cfg(all(target_os = "linux", feature = "bpf"))` and runtime-gated by `RIFTGATE_ENABLE_BPF=1`. Programs live in sibling crate `crates/riftgate-obs-bpf` compiled to `bpfel-unknown-none`. Per [ADR `0024`](../06-adrs/0024-ebpf-via-aya.md). |
+| `TokenLevelAggregator` | **v0.4** | `riftgate-obs` | Three-substrate aggregator: per-`(tenant, model, route)` HDR histograms for aggregate TTFT / inter-token / jitter latency, Vitter Algorithm R reservoir (default `K=100`, 60 s window) for bounded random per-token spans, and per-token WAL `TokenEvent` records for forensic replay. Bounded dimension cap (default 10 000) with `(other, other, other)` fallback bucket. Per [ADR `0025`](../06-adrs/0025-token-level-metrics-probabilistic.md). |
+| `DcgmScrapeSource` | **v0.4** | `riftgate-obs` | Default `GpuPressureSource` impl; HTTP-scrapes NVIDIA `dcgm-exporter` per backend at operator-configured cadence (default 5 s); publishes `Histogram` events for utilization and memory and updates the `BackendSignals::gpu_pressure` field via `ArcSwap<GpuPressure>`. Per [ADR `0026`](../06-adrs/0026-gpu-pressure-via-dcgm-exporter.md). |
+| `NvmlSource` | **v0.4** | `riftgate-obs` | Feature-gated `gpu-nvml` alternate `GpuPressureSource` impl; in-process FFI via `nvml-wrapper`; for GPU-co-located Riftgate deployments. Empty-lib elsewhere; macOS and non-NVIDIA Linux compile cleanly. |
+| `NoopGpuSource` | **v0.4** | `riftgate-core` | Default when no `gpu_pressure_source` block is configured for a backend. Returns `None`. |
 
-Decision rationale: [Options 013 (observability sink)](../05-options/013-observability-sink.md), [Options 014 (eBPF integration)](../05-options/014-ebpf-integration.md).
+Decision rationale: [Options 013 (observability sink)](../05-options/013-observability-sink.md), [Options 014 (eBPF integration)](../05-options/014-ebpf-integration.md), [Options 027 (token-level metrics)](../05-options/027-token-level-metrics.md), [Options 028 (GPU pressure correlation)](../05-options/028-gpu-pressure-correlation.md).
 
 Foundational principle: eBPF (verifier, JIT, maps, kprobes / tracepoints / XDP / TC / LSM attachment points). Canonical references: kernel.org BPF documentation, Brendan Gregg's *BPF Performance Tools*, the Aya book.
 
@@ -75,8 +78,10 @@ The eBPF sink (v0.4) is the inverse direction: BPF programs running in the kerne
 - **High-cardinality metric labels** (e.g. `request_id` as a label) are a fast path to a melted Prometheus. The `Labels` API will guard against this when `PrometheusSink` lands; for v0.1 the convention is enforced by code review.
 - **`Publisher::publish` must be cheap.** It is called from the request hot path; the implementation is `try_send` plus a counter increment, no allocation outside the event itself.
 - **Drop counter underreports under contention.** The atomic increment is `Relaxed`; drops are measured per-shard and aggregated by the OTel exporter. Reading the counter mid-aggregation can underreport by a small bounded amount.
-- **eBPF verifier rejections** (v0.4). Aya programs can grow complex enough to fail the kernel verifier. We will test against multiple kernel versions when v0.4 lands.
-- **Profiling overhead** (v0.4). Even sampled BPF profiling costs a few percent CPU. We document the cost and let users opt out.
+- **eBPF verifier rejections** (v0.4). Aya programs can grow complex enough to fail the kernel verifier. We test against multiple kernel versions (5.15 LTS and 6.1 LTS via a containerized harness in `crates/riftgate-obs/tests/bpf_verifier.rs`); CI gates on verifier-acceptance. Per [ADR `0024`](../06-adrs/0024-ebpf-via-aya.md).
+- **Profiling overhead** (v0.4). Even sampled BPF profiling costs a few percent CPU. We document the cost in [`RUNBOOK.md`](../../RUNBOOK.md), default the sampling rate to 19 Hz (matching Linux `perf`), and let operators opt out via `RIFTGATE_ENABLE_BPF=0` (the default).
+- **GPU-pressure staleness** (v0.4). `DcgmScrapeSource` reads on a 5 s cadence by default; routers see GPU pressure with documented bounded staleness. This is intentional — staleness is the cost of decoupling the routing hot path from GPU telemetry I/O. Per [ADR `0026`](../06-adrs/0026-gpu-pressure-via-dcgm-exporter.md).
+- **Token-level dimension cap** (v0.4). The bounded `HashSet<(tenant, model, route)>` (default 10 000 capacity) prevents cardinality explosion in `TokenLevelAggregator`; overflow falls to `(other, other, other)` and emits `riftgate_observability_dimension_capped_total`. Operators with very high tenant cardinality raise the cap with documented memory cost.
 
 ### Standards and review gates
 
@@ -94,9 +99,12 @@ The eBPF sink (v0.4) is the inverse direction: BPF programs running in the kerne
 
 ## Open questions
 
-- Should we support per-tenant observability scoping? Recommend yes for `v1.0` via a `tenant` label and label-based filtering at the sink.
-- Should we publish raw token streams to OTel as events? Recommend no — too expensive. WAL is the right place for per-token data.
-- How do we handle eBPF programs that need to evolve as kernels evolve? CO-RE (Compile Once Run Everywhere) for portability; track Aya releases closely.
+- Should we support per-tenant observability scoping? Recommend yes for `v1.0` via a `tenant` label and label-based filtering at the sink. Intersects with multitenancy ([Options `017`](../05-options/README.md)).
+- Should we publish raw token streams to OTel as events? **Resolved (v0.4):** no — the WAL is the right place for full per-token data; OTel receives reservoir-sampled token sub-spans only. Per [ADR `0025`](../06-adrs/0025-token-level-metrics-probabilistic.md).
+- How do we handle eBPF programs that need to evolve as kernels evolve? CO-RE (Compile Once Run Everywhere) for portability; track Aya releases closely. v0.4 floor is Linux 5.15 LTS per [ADR `0024`](../06-adrs/0024-ebpf-via-aya.md).
+- Multi-vendor GPU telemetry (AMD ROCm, Habana, Inferentia). `v0.4` supports AMD via Prometheus scrape against ROCm SMI exporter (`DcgmScrapeSource` works against any compatible Prometheus endpoint). Native ROCm SMI / Habana / Inferentia impls become clean future additions behind the `GpuPressureSource` trait. The long-term option is the deferred sidecar per [Options `028` §3.3](../05-options/028-gpu-pressure-correlation.md).
+- BPF-sourced byte-egress timestamps for sub-millisecond inter-token-latency precision. `v0.4` ships userspace `Instant::now()` as the default timestamp source; `TokenLevelAggregator` accepts BPF-sourced timestamps behind the `bpf-token-timestamps` feature when [ADR `0024`](../06-adrs/0024-ebpf-via-aya.md)'s BPF programs are enabled.
+- CMS heavy-hitters extension (Options `027` §3.5) for "top-K tenants by token burn this hour" deferred to `v1.0` unless operator demand surfaces during `v0.4` close-out.
 
 ## Probabilistic structures for token-level metrics (`v0.4`)
 

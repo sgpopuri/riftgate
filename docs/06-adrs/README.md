@@ -39,8 +39,16 @@ Each ADR captures a decision: context, decision, consequences. Format is Michael
 | 0016 | [Three-state circuit breaker per backend; sliding-window and adaptive deferred](0016-three-state-circuit-breaker.md) | accepted | 2026-05-25 | [011-circuit-breaker](../05-options/011-circuit-breaker.md) |
 | 0017 | [Drop-newest 503 backpressure with high/low water marks; adaptive concurrency deferred](0017-drop-newest-503-backpressure.md) | accepted | 2026-05-25 | [012-backpressure](../05-options/012-backpressure.md) |
 | 0018 | [TokenBucketLimiter parameter set: packed AtomicU64 with SCALE = 65536, 64 DashMap shards](0018-token-bucket-parameters.md) | accepted | 2026-05-25 | [023-token-bucket-parameters](../05-options/023-token-bucket-parameters.md) |
+| 0019 | [WASM extension mechanism via wasmtime with frozen `riftgate:filter/v1` component-model ABI](0019-wasm-extension-mechanism.md) | accepted | 2026-05-25 | [016-extension-mechanism](../05-options/016-extension-mechanism.md) |
+| 0020 | [Stream cancellation via `tokio_util::sync::CancellationToken` wrapped in a typed `Cancellation` newtype](0020-stream-cancellation-cancellation-token.md) | accepted | 2026-05-25 | [024-stream-cancellation](../05-options/024-stream-cancellation.md) |
+| 0021 | [External `riftgate-replay` CLI binary with `dump`, `replay`, `eval` subcommands](0021-external-replay-cli.md) | accepted | 2026-05-25 | [019-replay-eval](../05-options/019-replay-eval.md) |
+| 0022 | [KV-cache-aware routing via an in-tree prefix trie with xxHash3-64 byte-hashing](0022-kv-aware-routing-prefix-trie.md) | accepted | 2026-05-25 | [025-v03-routing-strategies](../05-options/025-v03-routing-strategies.md) |
+| 0023 | [Hedged requests via Dean–Barroso threshold-triggered shape, degree=2, rate-limit-budget-aware](0023-hedged-requests-p99-triggered.md) | accepted | 2026-05-25 | [025-v03-routing-strategies](../05-options/025-v03-routing-strategies.md) |
+| 0024 | [eBPF integration via Aya (pure-Rust BPF), Linux 5.15+, feature-gated and opt-in](0024-ebpf-via-aya.md) | accepted | 2026-05-25 | [014-ebpf-integration](../05-options/014-ebpf-integration.md) |
+| 0025 | [Token-level metrics via reservoir-sampled OTel spans + HDR-histogram aggregates + per-token WAL records](0025-token-level-metrics-probabilistic.md) | accepted | 2026-05-25 | [027-token-level-metrics](../05-options/027-token-level-metrics.md) |
+| 0026 | [GPU pressure correlation via DCGM exporter scrape (primary) and NVML in-process FFI (escape hatch)](0026-gpu-pressure-via-dcgm-exporter.md) | accepted | 2026-05-25 | [028-gpu-pressure-correlation](../05-options/028-gpu-pressure-correlation.md) |
 
-Numbers `0019` and `0020` are reserved in order for the remaining Options docs (`016`, `017`, `018`, `019`) and will be written as each decision lands. ADR `0015` is listed above as `proposed` because its Options doc is already authored and its decision is already framed; it will move to `accepted` at the open of `v0.5`.
+ADR `0015` is listed above as `proposed` because its Options doc is already authored and its decision is already framed; it will move to `accepted` at the open of `v0.5`.
 
 ## Status legend
 
