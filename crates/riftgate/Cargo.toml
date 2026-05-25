@@ -34,6 +34,11 @@ riftgate-parser  = { path = "../riftgate-parser" }
 # Async runtime + IO.
 tokio            = { workspace = true }
 
+# Lock-free queues. ADR 0005 picks crossbeam-channel for the v0.1 sharded
+# MPMC backing; the v0.2 `PerShardScheduler` lives in this crate per the
+# scheduler-trait module docs.
+crossbeam-channel = { workspace = true }
+
 # HTTP server + client.
 hyper            = { workspace = true }
 hyper-util       = { workspace = true }

@@ -16,23 +16,26 @@ Tag pushes may run release **build + test** workflows; they do not publish to cr
 
 > _**Project context (read every session):**_
 >
-> - **Active milestone:** `v0.2` — production scheduler, in-proc rate limiter, file WAL. Planning in flight; no code yet. The full v0.2 deliverable list lives in the [v0.2 section below](#v02--production-edges).
-> - **Recently shipped (`v0.1` walking skeleton, tagged 2026-05-10):** the entire walking-skeleton implementation is in. Seven crates (`riftgate-core`, `riftgate-io-epoll`, `riftgate-parser`, `riftgate-config`, `riftgate-router`, `riftgate-obs`, `riftgate`) compile, test, and run end-to-end against a real OpenAI-shaped backend with SSE streaming, OTel tracing, `/health` + `/ready`, and SIGTERM drain. Six criterion benchmarks are in. The [`examples/01-basic-openai-proxy`](../examples/01-basic-openai-proxy/) dev loop is in. Three new Options docs ([`006`](05-options/006-timer-subsystem.md), [`013`](05-options/013-observability-sink.md), [`015`](05-options/015-config-model.md)) and three new ADRs ([`0010`](06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md), [`0011`](06-adrs/0011-otel-default-sink-multisink-fanout.md), [`0012`](06-adrs/0012-static-toml-env-override-v01.md)) are accepted. The full close-out narrative lives in the [`v0.1` retrospective](02b-v0.1-retrospective.md).
-> - **In flight (`v0.2` preparation):**
->   - Three new Options docs: `010-routing-strategy` (weighted random + KV-aware), `012-backpressure` (queue-saturation + adaptive concurrency), and the `v0.2` rate-limiting Options doc ([`021`](05-options/021-rate-limiting.md) is the foundation; the `v0.2` doc names the `TokenBucketLimiter` parameters).
->   - Promote ADR [`0009` (rate-limiter trait + in-proc-only impl)](06-adrs/0009-rate-limiter-trait-in-proc-only.md) from `proposed` to `accepted` once the v0.2 plan opens.
->   - First implementation phase: `crates/riftgate-core/src/scheduler.rs` and `crates/riftgate-core/src/queue.rs` get production impls (`PerCoreScheduler`, `MpmcQueue`, `ShardedMpmcQueue`); the v0.1 binary migrates from the tokio runtime to `PerCoreScheduler` behind a feature flag for the migration window.
-> - **Open questions (carried forward from `v0.1` close-out):**
->   - Domain availability for `riftgate.io` / `riftgate.dev` / `riftgate.com` — still not reserved. Recommended pre-broader-announcement decision.
->   - `BumpArena` pooling shape — per-shard or shared. `v0.2` decides once measured.
->   - `HierarchicalWheel` cutover criteria — `v0.2` plan should name a schedule/cancel/tick threshold above which `BinaryHeapTimers` is no longer acceptable.
->   - eBPF library choice (Options `014`: bpftrace vs libbpf vs Aya) — explicitly `v0.4` work; no `v0.2` blocker.
->   - At `v0.2` retro: whether to pursue Options `022` (priority / fairness scheduling).
->   - At `v0.4` retro: whether to pursue Options `029` (async telemetry pipeline).
-> - **Recent learnings (the `v0.1` retrospective is the canonical surface):**
->   - The trait surfaces designed in Phase C survived implementation almost unchanged. Two design adjustments — `AsyncIO` and `Allocator::reset` taking `&mut self` — were both documented as risks in the LLDs and surfaced in week one.
->   - The pragmatic concession was binary-side: the v0.1 binary uses tokio + hyper for the actual HTTP server and client (per ADRs `0003` / `0007`), with `riftgate-io-epoll` and `riftgate-parser` shipping as the alternative impls behind their traits. The `SseFramer` *is* exercised on the upstream response body for token observation, so the trait isn't theoretical.
->   - Per-crate bench layout (rather than a consolidated `crates/riftgate/benches/`) means `cargo bench -p riftgate-core` runs the relevant subset without compiling the full dependency graph; keep this pattern.
+> - **Active milestone:** `v0.3` prep — perf-stabilization sweep, headline benchmarks, `PerShardScheduler` binary cutover, `io_uring` conformance harness lift.
+> - **Recently shipped (`v0.2` the systems showpiece, tagged at this commit):** five new Options docs ([`009`](05-options/009-request-log.md), [`010`](05-options/010-routing-strategy.md), [`011`](05-options/011-circuit-breaker.md), [`012`](05-options/012-backpressure.md), [`023`](05-options/023-token-bucket-parameters.md)); five new accepted ADRs ([`0013`](06-adrs/0013-append-only-file-wal.md), [`0014`](06-adrs/0014-weighted-random-router.md), [`0016`](06-adrs/0016-three-state-circuit-breaker.md), [`0017`](06-adrs/0017-drop-newest-503-backpressure.md), [`0018`](06-adrs/0018-token-bucket-parameters.md)); [ADR `0009`](06-adrs/0009-rate-limiter-trait-in-proc-only.md) promoted to `accepted`; four LLDs refreshed. New code: `MpmcQueue` + `ShardedMpmcQueue` + `PerShardScheduler` in `crates/riftgate`; `TokenBucketLimiter` + `NoopLimiter` in `crates/riftgate-core`; `WeightedRandomRouter` + `CircuitBreakerArbiter` in `crates/riftgate-router`; `BackpressurePolicy` trait + `HighWaterPolicy` + `DenialReason` in `crates/riftgate-core`; new crate `crates/riftgate-replay` with `FileWal` implementing `riftgate_core::wal::WAL` per ADR `0013`; new crate `crates/riftgate-io-uring` (Linux + `--features io-uring`, empty-lib elsewhere). The full close-out narrative lives in the [`v0.2` retrospective](02c-v0.2-retrospective.md).
+> - **In flight (`v0.3` Phase 1 — perf-sweep scoping):**
+>   - Draft Options docs for the four bench targets (`scheduler`, `rate_limit`, `routing`, `wal`) under `benchmarks/v0.2-headline/`.
+>   - Lift `crates/riftgate-io-epoll/tests/conformance.rs` into a shared `AsyncIO` conformance harness imported by both `riftgate-io-epoll` and `riftgate-io-uring`.
+>   - `PerShardScheduler` binary cutover behind `--features per-core-scheduler`; compare against the tokio multi-thread baseline.
+> - **Upcoming (`v0.3` Phase 2+):**
+>   - Headline benchmarks vs LiteLLM and one published Rust gateway (per AGENTS.md §5 reproducibility contract).
+>   - `BumpArena` pooling decision (per-shard vs shared) once measured under sustained load.
+>   - `HierarchicalWheel` cutover decision per [ADR `0010`](06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md), gated on the timer microbenchmark crossing a documented threshold.
+> - **Open questions (carried forward from `v0.2` close-out):**
+>   - Domain availability for `riftgate.io` / `riftgate.dev` / `riftgate.com` — still not reserved. Now two milestones overdue.
+>   - `BumpArena` pooling shape — per-shard or shared. v0.3 decides under measurement.
+>   - `HierarchicalWheel` cutover threshold — schedule/cancel/tick ops/sec above which the binary-heap impl is no longer acceptable.
+>   - Options `022` (priority / fairness scheduling) — v0.3 retro decides whether to commission the Options doc.
+>   - eBPF library choice (Options `014`: bpftrace vs libbpf vs Aya) — explicitly v0.4 work; no v0.3 blocker.
+> - **Recent learnings (the `v0.2` retrospective is the canonical surface):**
+>   - Packed-`AtomicU64`-with-CAS-loop is now a documented v0.2 idiom — used by both `TokenBucketLimiter` (tokens mantissa + epoch ms) and `CircuitBreakerArbiter` (state tag + failure count). Document it in the next refresh of `lld-rate-limiter` and `lld-routing`.
+>   - Empty-on-non-Linux crate compile works cleanly by combining `target.'cfg(target_os = "linux")'.dependencies` with `cfg(all(target_os = "linux", feature = "..."))` gates on every module. Reusable pattern for future Linux-only backends.
+>   - Vose's alias method (1991) was the right choice for `WeightedRandomRouter` — O(1) per pick, O(N) one-time setup, fits the v0.2 32-backend ceiling comfortably.
 >
 > _Update this section in every session that ships meaningful progress. This is the live project-context surface for the context harness defined in [`AGENTS.md`](../AGENTS.md)._
 

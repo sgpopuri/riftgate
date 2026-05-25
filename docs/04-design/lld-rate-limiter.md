@@ -2,7 +2,7 @@
 
 > Per-instance rate limiting on the hot path. Token-bucket by default, trait-shaped so a future distributed impl (Redis / Dragonfly / sharded GCRA) can drop in without breaking callers.
 >
-> Status: **v0.1 ships the trait only** — `RateLimiter` lives in `crates/riftgate-core/src/rate_limit.rs` with no production impl. `TokenBucketLimiter` (the in-proc default) and `NoopLimiter` land in v0.2 per [ADR 0009](../06-adrs/0009-rate-limiter-trait-in-proc-only.md); a distributed impl is revisited only if and when a real workload demands it.
+> Status: **v0.1 ships the trait only** — `RateLimiter` lives in `crates/riftgate-core/src/rate_limit.rs` with no production impl. **v0.2 ships `TokenBucketLimiter` and `NoopLimiter` in `riftgate-core`** per [ADR `0009`](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (accepted) and [ADR `0018`](../06-adrs/0018-token-bucket-parameters.md) (parameter set: packed `AtomicU64` with `SCALE = 1 << 16`, 64 DashMap shards, per-shard epoch nanos). A distributed impl is revisited only if and when a real workload demands it.
 
 ## Purpose
 
@@ -40,7 +40,7 @@ The `cost` parameter carries the multi-dimensional weight of the request: `1` fo
 | `NoopLimiter` | `v0.2` | `riftgate-core` | Pass-through; used when rate-limiting is disabled in config. |
 | `RedisGcraLimiter` | future | `riftgate-rate-redis` (not yet) | Behind a `rate-limit-redis` feature flag. Lua-script-atomic GCRA. |
 
-Decision rationale, candidates, and rejected alternatives: see [Options `021` (rate limiting)](../05-options/021-rate-limiting.md).
+Decision rationale, candidates, and rejected alternatives: see [Options `021` (rate limiting)](../05-options/021-rate-limiting.md). Implementation parameters (state packing, shard count, scale factor, cost-function shape, operator knob set): see [Options `023` (token bucket parameters)](../05-options/023-token-bucket-parameters.md) and [ADR `0018`](../06-adrs/0018-token-bucket-parameters.md).
 
 ## Component context
 
@@ -93,4 +93,4 @@ No dependency on the WAL, the filter chain, the router, or the scheduler.
 
 - Should denied requests update a per-subject "recent denial count" to feed an adaptive circuit breaker? Recommend yes for a `v0.3+` iteration, not in the first ship.
 - Should we support per-method cost functions at the route level (e.g. "a streaming request costs 10× a non-streaming one")? Recommend yes via config, but keep the trait signature unchanged.
-- How does this compose with [Options `012` (backpressure)](../05-options/012-backpressure.md)? The rate limiter is a policy-driven deny; backpressure is a queue-saturation deny. They can stack: rate-limit first (cheaper), backpressure second (needs queue state). Document the stacking order in `lld-scheduling.md` once both are in.
+- How does this compose with [Options `012` (backpressure)](../05-options/012-backpressure.md)? The rate limiter is a policy-driven deny; backpressure is a queue-saturation deny; the [circuit breaker](../05-options/011-circuit-breaker.md) is an upstream-health deny. All three speak the shared `DenialReason` vocabulary (`RateLimit`, `QueueFull`, `CircuitOpen`) so OTel counters, `Retry-After` propagation, and operator dashboards have one structured cause label across the three primitives. **Stacking order on the request path: rate limit first (cheapest), backpressure second (needs queue state), breaker is consulted at router-dispatch time.** Documented in [`lld-scheduling.md`](lld-scheduling.md).

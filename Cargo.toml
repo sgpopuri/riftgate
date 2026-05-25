@@ -22,6 +22,8 @@ members = [
     "crates/riftgate-config",
     "crates/riftgate-router",
     "crates/riftgate-obs",
+    "crates/riftgate-replay",
+    "crates/riftgate-io-uring",
 ]
 exclude = [
     # cargo-fuzz sub-packages are opt-in; cargo-fuzz invokes them
@@ -49,8 +51,19 @@ authors       = ["Sriram Popuri"]
 tokio        = { version = "1.40",  features = ["full"] }
 mio          = { version = "1.0",   features = ["os-poll", "net"] }
 
+# io_uring backend for the AsyncIO trait (Linux 5.10+, opt-in via the
+# `io-uring` feature on `riftgate-io-uring`). ADR 0002 keeps epoll as the
+# default; io_uring is the second concrete `AsyncIO` impl, gated by feature
+# and target.
+io-uring     = "0.7"
+
 # Lock-free queues. ADR 0005 picks crossbeam-channel for the v0.1 sharded MPMC.
 crossbeam-channel = "0.5"
+
+# Sharded concurrent hashmap. ADR 0018 picks dashmap as the backing for the
+# per-subject TokenBucketLimiter state; 64 shards by default to reduce
+# producer-side lock contention on hot tenants.
+dashmap           = "6.1"
 
 # Per-request bump arena. ADR 0006 picks bumpalo as the BumpArena backing.
 bumpalo      = { version = "3.16",  features = ["collections"] }

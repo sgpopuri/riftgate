@@ -15,6 +15,7 @@
 - [MVP-to-v1.0 roadmap](02-mvp-roadmap.md)
 - [v0.0 retrospective](02a-v0.0-retrospective.md)
 - [v0.1 retrospective](02b-v0.1-retrospective.md)
+- [v0.2 retrospective](02c-v0.2-retrospective.md)
 
 # Architecture
 

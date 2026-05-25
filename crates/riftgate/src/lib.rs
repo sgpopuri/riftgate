@@ -18,6 +18,7 @@ pub mod bootstrap;
 pub mod error;
 pub mod health;
 pub mod proxy;
+pub mod scheduler;
 pub mod server;
 pub mod shutdown;
 pub mod upstream;

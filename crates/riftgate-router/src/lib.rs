@@ -20,8 +20,12 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod circuit;
 mod constant;
 mod round_robin;
+mod weighted;
 
+pub use circuit::{CircuitBreakerArbiter, CircuitBreakerConfig};
 pub use constant::ConstantRouter;
 pub use round_robin::RoundRobinRouter;
+pub use weighted::{MAX_WEIGHTED_BACKENDS, WeightedRandomRouter};

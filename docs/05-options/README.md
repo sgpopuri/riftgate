@@ -29,10 +29,10 @@ This is the moat. Read a few entries to get the project's flavor before contribu
 | 006 | [timer subsystem](006-timer-subsystem.md) | recommended | [0010](../06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md) | binary heaps, hashed / hierarchical timer wheels (Varghese & Lauck), `timerfd` / `kevent` `EVFILT_TIMER` |
 | 007 | [protocol parser](007-protocol-parser.md) | recommended | [0007](../06-adrs/0007-handrolled-fsm-parser.md) | FSM-based protocol parsing |
 | 008 | [stream framing](008-stream-framing.md) | recommended | [0008](../06-adrs/0008-sse-default-grpc-future.md) | ring buffers and zero-copy I/O, FSM-based parsing |
-| 009 | request log | TBD | TBD | LSM trees, write-ahead logging |
-| 010 | routing strategy | TBD | TBD | sidecar / ambassador patterns, KV-aware prefix routing |
-| 011 | circuit breaker | TBD | TBD | resilience patterns (Nygard *Release It*) |
-| 012 | backpressure policy | TBD | TBD | backpressure as policy, drop-on-full ring buffers |
+| 009 | [request log](009-request-log.md) | recommended | [0013](../06-adrs/0013-append-only-file-wal.md) | LSM trees, write-ahead logging (ARIES), group-commit fsync, append-only file design (Kafka log segments) |
+| 010 | [routing strategy](010-routing-strategy.md) | recommended | [0014](../06-adrs/0014-weighted-random-router.md) | weighted-random sampling (Walker alias method, Vose 1991), KV-aware prefix routing (vLLM), hedged requests (Dean & Barroso) |
+| 011 | [circuit breaker](011-circuit-breaker.md) | recommended | [0016](../06-adrs/0016-three-state-circuit-breaker.md) | resilience patterns (Nygard *Release It*), sliding-window failure-rate (Hystrix), FSM-based protection primitives |
+| 012 | [backpressure policy](012-backpressure.md) | recommended | [0017](../06-adrs/0017-drop-newest-503-backpressure.md) | backpressure as policy, drop-on-full ring buffers (LMAX Disruptor), Little's law, AIMD admission control |
 | 013 | [observability sink](013-observability-sink.md) | recommended | [0011](../06-adrs/0011-otel-default-sink-multisink-fanout.md) | OpenTelemetry / OTLP, Prometheus exposition format, bounded ring-buffer drop-on-full (LMAX Disruptor lineage), eBPF (later) |
 | 014 | eBPF integration | TBD | TBD | eBPF (Aya, libbpf, bpftrace) |
 | 015 | [configuration model](015-config-model.md) | recommended | [0012](../06-adrs/0012-static-toml-env-override-v01.md) | layered configuration (defaults → file → env), twelve-factor configuration, `serde` + `toml`, file-watch hot reload (`inotify` / `kevent` `EVFILT_VNODE`), Kubernetes CRDs |
@@ -41,8 +41,9 @@ This is the moat. Read a few entries to get the project's flavor before contribu
 | 018 | deployment | TBD | TBD | sidecar / ambassador deployment patterns |
 | 019 | replay-eval | TBD | TBD | streaming sketches, write-ahead logging |
 | 020 | language (Rust vs Zig) | TBD | [0001](../06-adrs/0001-rust-not-go-or-zig.md) | — |
-| 021 | [rate-limiting](021-rate-limiting.md) | recommended | [0009](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (proposed) | rate-limiting algorithms (token bucket, GCRA), consistent hashing (future distributed), priority heaps (priority under pressure), lock-free structures |
+| 021 | [rate-limiting](021-rate-limiting.md) | accepted | [0009](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (accepted), [0018](../06-adrs/0018-token-bucket-parameters.md) | rate-limiting algorithms (token bucket, GCRA), consistent hashing (future distributed), priority heaps (priority under pressure), lock-free structures |
 | 022 | fairness-scheduling (optional; decide at `v0.2` retro) | TBD | TBD | work-stealing, priority heaps |
+| 023 | [token-bucket-parameters](023-token-bucket-parameters.md) | recommended | [0018](../06-adrs/0018-token-bucket-parameters.md) | packed atomic state (Vyukov-style CAS), sharded hash maps, fixed-point arithmetic |
 | 026 | [mcp-orchestration](026-mcp-orchestration.md) | recommended | [0015](../06-adrs/0015-mcp-extension-plane-broker.md) (proposed) | ambassador pattern, capability-based security, allowlist data structures (tries, bit-sets), topological sort over DAGs, write-ahead logging for audit |
 | 027 | upstream-protocols-http2-grpc (optional; deepens 008) | TBD | — | FSM-based parsing |
 | 028 | token-accounting (optional; folds into filter starter library) | TBD | — | — |

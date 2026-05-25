@@ -2,7 +2,7 @@
 
 > Append-only request log capturing every (request, response) pair for replay, eval generation, and post-mortem debugging.
 >
-> Status: **v0.1 ships the trait only** — `WAL` lives in `crates/riftgate-core/src/wal.rs` with no production impl. `FileWal` lands in v0.2 per [Options 009](../05-options/009-request-log.md); the replay framework lands in v1.0.
+> Status: **v0.1 ships the trait only** — `WAL` lives in `crates/riftgate-core/src/wal.rs` with no production impl. **v0.2 ships `FileWal` in `crates/riftgate-replay`** per [Options `009`](../05-options/009-request-log.md) and [ADR `0013`](../06-adrs/0013-append-only-file-wal.md): per-shard segment files, length-prefixed framed records, group-commit `fdatasync`, mixed `Async`/`Fdatasync`/`Fsync` durability per entry. The v1.0 replay framework extends the same crate's CLI.
 
 ## Purpose
 
@@ -29,13 +29,13 @@ pub trait WAL: Send + Sync {
 
 | Impl | Status | Source crate | Notes |
 |------|--------|--------------|-------|
-| `FileWal` | `v0.2` | `riftgate-replay` | Append-only file with length+CRC framing. Fastest, simplest. |
-| `RocksWal` | future | TBD | Embedded RocksDB. Adds compaction, range queries, but more dependencies. |
+| `FileWal` | `v0.2` | `riftgate-replay` | Per-shard segment files (`seg-{shard:04}-{seqno:020}.wal`); length-prefixed framing; group-commit `fdatasync` flusher per shard; mixed durability per entry. |
+| `RocksWal` | rejected | n/a | Wrong shape for our access pattern; see [ADR `0013`](../06-adrs/0013-append-only-file-wal.md). |
 | `NullWal` | `v0.1` | `riftgate-core` | No-op for benchmarks and dev. |
 
-Decision rationale: [Options 009 (request log)](../05-options/009-request-log.md).
+Decision rationale: [Options `009` (request log)](../05-options/009-request-log.md) and [ADR `0013`](../06-adrs/0013-append-only-file-wal.md).
 
-Foundational principles: write-ahead logging and ARIES-style crash recovery (Mohan et al., *ARIES*, ACM TODS 1992); LSM-tree storage engines (O'Neil et al.; RocksDB, LevelDB, Cassandra) for the future embedded-store path.
+Foundational principles: write-ahead logging and ARIES-style crash recovery (Mohan et al., *ARIES*, ACM TODS 1992); group-commit fsync (Hagmann 1987; Mohan & Lindsay 1983); per-shard segment files (Kafka log-segment lineage); `fdatasync` over `fsync` for append-only WAL (Pillai et al., 2014).
 
 ## Component context
 
@@ -45,14 +45,13 @@ The WAL writer is a dedicated thread (or a dedicated worker on the per-core sche
 
 ### Durability modes
 
-Configurable per Riftgate instance:
+Configurable per entry via `Durability::{Async, FdataSync, Fsync}`; the binary picks a `default_durability` at config-load time:
 
-- `none` — WAL is disabled. Fastest. No replay capability.
-- `async` — WAL writes are best-effort; data plane does not wait. Crash may lose the last few seconds of records. **Default.**
-- `batched_fsync` — WAL writes accumulate in memory; fsync on a configurable interval (e.g. 100ms). Lower data loss.
-- `sync` — Every WAL append blocks the response until fsync completes. Strongest durability, lowest throughput.
+- `Async` — entry returns after the per-shard ring-buffer write; the flusher writes and (optionally) `fdatasync`s in the background. Crash may lose entries between the last flush and the crash. Hot-path default for request envelopes.
+- `FdataSync` — entry parks until the next group-commit completes a per-shard `fdatasync(2)`. **`v0.2` default** for `default_durability`.
+- `Fsync` — same as `Fdatasync` but uses `fsync(2)`. Reserved for audit-grade entries (v0.5 `McpAuditEvent`); not the default for the v0.2 binary.
 
-Mode is per-instance, not per-request. A single config knob.
+The flusher cadence is per-shard: every `flush_interval_ms` (default 5 ms) or when the per-shard ring buffer crosses `flush_buffer_bytes` (default 1 MiB). Segment rollover at `segment_size_max_mib` (default 64 MiB).
 
 ### Patterns and conventions
 

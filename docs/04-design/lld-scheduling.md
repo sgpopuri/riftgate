@@ -2,7 +2,7 @@
 
 > The accept loop, worker shards, request queue, and (optional) work-stealing scheduler.
 >
-> Status: **shipped (v0.1, tokio multi-thread runtime + accept loop in `crates/riftgate/src/server.rs`)**. Custom `PerCoreScheduler` and work-stealing impls land in v0.2 behind the same trait.
+> Status: **shipped (v0.1, tokio multi-thread runtime + accept loop in `crates/riftgate/src/server.rs`)**. v0.2 lands `MpmcQueue` and `ShardedMpmcQueue` (per [ADR `0005`](../06-adrs/0005-sharded-mpmc-queue.md)) and the `PerCoreScheduler` impl (per [ADR `0004`](../06-adrs/0004-per-shard-default-stealing-opt-in.md)) behind the same trait, gated in the binary by `--features per-core-scheduler` for the migration window.
 
 ## Purpose
 
@@ -46,10 +46,16 @@ Both are `Send + Sync` because the v0.2 plan is to share an `Arc<dyn Scheduler>`
 | tokio multi-thread runtime | work-stealing (tokio) | shipped (v0.1, default) | Per [ADR 0003](../06-adrs/0003-tokio-multithread-default.md). The walking-skeleton scheduler. |
 | `PerCoreScheduler` | thread-per-core | v0.2 | Custom `Scheduler` impl. One worker per core, sharded queues, no work-stealing by default. |
 | `WorkStealingScheduler` | work-stealing | v0.2 (opt-in) | Chase-Lev deque per worker; FIFO steal. Behind a Cargo feature. |
-| `MpmcQueue<T>` | lock-free MPMC | v0.2 | Vyukov-style sequence numbers. |
-| `ShardedMpmcQueue<T>` | sharded MPMC | v0.2 | One MPMC per worker shard for accept→worker handoff. |
+| `MpmcQueue<T>` | lock-free MPMC | v0.2 | crossbeam-channel bounded wrapper per [ADR `0005`](../06-adrs/0005-sharded-mpmc-queue.md). |
+| `ShardedMpmcQueue<T>` | sharded MPMC | v0.2 | One `MpmcQueue` per worker shard for accept→worker handoff; atomic-cursor producer fan-out; optional Chase-Lev steal on `pop_or_steal` behind `--features work-stealing`. |
 
-Decision rationale: [Options 003 (concurrency)](../05-options/003-concurrency-model.md), [Options 004 (queue)](../05-options/004-request-queue.md).
+Decision rationale: [Options 003 (concurrency)](../05-options/003-concurrency-model.md), [Options 004 (queue)](../05-options/004-request-queue.md). The v0.2 protection primitives that interact with the queue/scheduler ([rate limiter](../05-options/021-rate-limiting.md) [`023`](../05-options/023-token-bucket-parameters.md), [backpressure](../05-options/012-backpressure.md), [circuit breaker](../05-options/011-circuit-breaker.md)) all speak the shared `DenialReason` vocabulary; stacking order on the request path is:
+
+1. **Rate limit** — cheapest, runs before any queue work. Denies emit `DenialReason::RateLimit`.
+2. **Backpressure** — evaluated at `ShardedMpmcQueue::push`. Denies emit `DenialReason::QueueFull`.
+3. **Circuit breaker** — evaluated at router-dispatch time via the `CircuitBreakerArbiter<R>` decorator. Denies emit `DenialReason::CircuitOpen`.
+
+All three return `503` or `429` with `Retry-After` and a structured `DenialReason` label on the OTel counter `riftgate.requests.rejected`.
 
 ## Component context
 

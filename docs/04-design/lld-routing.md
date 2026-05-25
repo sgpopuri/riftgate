@@ -2,7 +2,7 @@
 
 > Backend selection: which backend gets which request. Pluggable strategies behind a single trait.
 >
-> Status: **shipped (v0.1, RoundRobin + ConstantRouter)**. Weighted, KV-aware, and hedged routers land in v0.2 / v0.3 behind the same trait.
+> Status: **shipped (v0.1, RoundRobin + ConstantRouter); v0.2 adds WeightedRandomRouter and the CircuitBreakerArbiter decorator.** KV-aware and hedged routers are explicitly deferred to v0.3 per [Options `010`](../05-options/010-routing-strategy.md) and [ADR `0014`](../06-adrs/0014-weighted-random-router.md).
 
 ## Purpose
 
@@ -44,11 +44,12 @@ The trait is `Send + Sync` (unlike `AsyncIO` and `TimerSubsystem`) because a sin
 |------|--------|--------------|-------|
 | `RoundRobinRouter` | shipped (v0.1, default) | `riftgate-router` | Atomic cursor over `BackendPool`. The v0.1 default for the binary. Statistical fairness verified by [`crates/riftgate-router/tests/fairness.rs`](../../crates/riftgate-router/tests/fairness.rs). |
 | `ConstantRouter` | shipped (v0.1) | `riftgate-router` | Always returns `Send(backend_id)`. Used as a test harness so other crates can verify routing-agnostic behavior. |
-| `WeightedRandomRouter` | v0.2 | `riftgate-router` | Per-backend weights. |
-| `KvAwareRouter` | v0.3 | `riftgate-router` | Integrates with `vllm-router` LMCache or uses an internal prefix trie. |
-| `HedgedRouter` | v0.3 | `riftgate-router` | Wraps any inner router; emits `Hedge(...)` decisions. |
+| `WeightedRandomRouter` | **v0.2** | `riftgate-router` | Walker alias method (Vose 1991); O(1) sampling regardless of weight distribution; alias table rebuilt at config-load and config-reload. Capped at N = 32 eligible backends in v0.2. Per [ADR `0014`](../06-adrs/0014-weighted-random-router.md). |
+| `CircuitBreakerArbiter<R>` | **v0.2** | `riftgate-router` | Decorator over any `Router` impl; filters `CircuitState::Open` backends out of the eligible set before delegating selection. Per [ADR `0016`](../06-adrs/0016-three-state-circuit-breaker.md). |
+| `KvAwareRouter` | deferred to v0.3 | `riftgate-router` | Integrates with `vllm-router` LMCache or uses an internal prefix trie; paired with the v0.3 WASM extension surface. |
+| `HedgedRouter` | deferred to v0.3 | `riftgate-router` | Wraps any inner router; emits `Hedge(...)` decisions; requires v0.3 stream-cancellation primitives. |
 
-Decision rationale: [Options 010 (routing strategy)](../05-options/010-routing-strategy.md).
+Decision rationale: [Options `010` (routing strategy)](../05-options/010-routing-strategy.md), [ADR `0014`](../06-adrs/0014-weighted-random-router.md), and (for the breaker decorator) [Options `011`](../05-options/011-circuit-breaker.md) + [ADR `0016`](../06-adrs/0016-three-state-circuit-breaker.md).
 
 ## Component context
 

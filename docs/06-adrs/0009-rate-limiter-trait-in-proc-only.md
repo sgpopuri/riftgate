@@ -1,8 +1,8 @@
 # ADR 0009. RateLimiter trait + in-proc token-bucket only in v0.2; distributed impls deferred
 
-> **Date:** TBD (target acceptance: at the open of `v0.2`)
-> **Status:** proposed
-> **Options doc:** [021-rate-limiting](../05-options/021-rate-limiting.md)
+> **Date:** 2026-05-25
+> **Status:** accepted
+> **Options doc:** [021-rate-limiting](../05-options/021-rate-limiting.md), [023-token-bucket-parameters](../05-options/023-token-bucket-parameters.md)
 > **Deciders:** Sriram Popuri
 
 ## Context

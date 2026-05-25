@@ -88,6 +88,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 pub mod allocator;
+pub mod backpressure;
 pub mod capability;
 pub mod error;
 pub mod filter;
@@ -105,6 +106,7 @@ pub mod wal;
 
 // Convenience re-exports: the most-used types from any caller.
 pub use allocator::{Allocator, BumpArena, SystemAllocator};
+pub use backpressure::{AdmissionDecision, BackpressurePolicy, DenialReason, HighWaterPolicy};
 pub use error::RiftgateCoreError;
 pub use filter::{Filter, FilterAction, IdentityFilter, LoggingFilter};
 pub use io::{AsyncIO, Event, Interest};

@@ -1,9 +1,9 @@
 # 021. Rate limiting
 
-> **Status:** `recommended` — trait-based rate limiter with a single in-proc token-bucket impl in `v0.2` (per-instance only through `v1.0`); distributed impls catalogued as a future extension of the same trait. See [ADR `0009`](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (proposed; targets the open of `v0.2`).
+> **Status:** `accepted` — trait-based rate limiter with a single in-proc token-bucket impl in `v0.2` (per-instance only through `v1.0`); distributed impls catalogued as a future extension of the same trait. See [ADR `0009`](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (accepted at v0.2 open).
 > **Foundational topics:** rate-limiting algorithms (fixed window, sliding window, token bucket, leaky bucket, GCRA), backpressure as policy, consistent hashing (for future distributed sharding), priority heaps (for which request gets throttled first), lock-free state for the in-proc impl
 > **Related options:** [`011 — circuit breaker`](011-circuit-breaker.md) (same family: protection primitives), [`012 — backpressure`](012-backpressure.md) (the policy complement)
-> **Related ADR:** [ADR `0009`](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (proposed)
+> **Related ADR:** [ADR `0009`](../06-adrs/0009-rate-limiter-trait-in-proc-only.md) (accepted), [ADR `0018`](../06-adrs/0018-token-bucket-parameters.md) (parameter set)
 
 ## 1. The decision in one sentence
 

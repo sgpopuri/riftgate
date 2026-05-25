@@ -18,6 +18,10 @@ categories   = ["network-programming", "asynchronous"]
 # `#![deny(unsafe_code)]`.
 bumpalo  = { workspace = true }
 
+# Sharded concurrent hashmap. ADR 0018 picks dashmap for TokenBucketLimiter
+# per-subject state; 64 shards by default.
+dashmap  = { workspace = true }
+
 # Used by the cancellation-set in BinaryHeapTimers; available without an extra
 # dep because thiserror pulls it transitively, but we declare it explicitly for
 # readability.
