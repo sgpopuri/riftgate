@@ -1,0 +1,16 @@
+# Pinned Rust toolchain for the workspace.
+#
+# Channel is "stable"; contributors who run `cargo`/`rustc` from inside the
+# workspace get the right toolchain via rustup automatically. The MSRV
+# (Minimum Supported Rust Version) is set in `Cargo.toml` (`rust-version =
+# "1.85"`) and is what downstream consumers compile against; this file is the
+# *contributor* toolchain, not the *consumer* MSRV.
+#
+# NFR-PT05 in docs/01-requirements/non-functional.md mandates "Stable, current
+# minus 2 minor versions" for MSRV; the contributor channel here tracks the
+# current stable.
+
+[toolchain]
+channel    = "stable"
+components = ["rustfmt", "clippy", "rust-src"]
+profile    = "default"

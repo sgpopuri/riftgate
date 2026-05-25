@@ -2,7 +2,7 @@
 
 > Per-instance rate limiting on the hot path. Token-bucket by default, trait-shaped so a future distributed impl (Redis / Dragonfly / sharded GCRA) can drop in without breaking callers.
 >
-> Status: **outline-stage**. Filled out as `v0.2` lands the first in-proc impl; revisited only if a distributed impl is pursued.
+> Status: **v0.1 ships the trait only** — `RateLimiter` lives in `crates/riftgate-core/src/rate_limit.rs` with no production impl. `TokenBucketLimiter` (the in-proc default) and `NoopLimiter` land in v0.2 per [ADR 0009](../06-adrs/0009-rate-limiter-trait-in-proc-only.md); a distributed impl is revisited only if and when a real workload demands it.
 
 ## Purpose
 

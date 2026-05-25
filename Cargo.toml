@@ -1,0 +1,147 @@
+# Riftgate workspace
+#
+# This is the root manifest for every Rust crate in the project. Members are
+# added as each phase of the v0.1 plan lands; until then the workspace is
+# intentionally empty so that `cargo check` succeeds on a fresh clone.
+#
+# All shared dependency versions live in [workspace.dependencies] so that
+# member crates pin via `tokio = { workspace = true }` (etc.) and bumps land in
+# one place. All shared lints live in [workspace.lints] for the same reason.
+#
+# See AGENTS.md for the documentation-first discipline this manifest is part
+# of: every load-bearing dependency choice traces back to an Options doc and an
+# ADR. Adding a new shared dependency without that linkage is a review failure.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/riftgate",
+    "crates/riftgate-core",
+    "crates/riftgate-io-epoll",
+    "crates/riftgate-parser",
+    "crates/riftgate-config",
+    "crates/riftgate-router",
+    "crates/riftgate-obs",
+]
+exclude = [
+    # cargo-fuzz sub-packages are opt-in; cargo-fuzz invokes them
+    # directly. They are excluded from the main workspace so a normal
+    # `cargo check --workspace` does not try to pull in nightly-only
+    # libfuzzer-sys.
+    "crates/riftgate-parser/fuzz",
+]
+
+[workspace.package]
+version       = "0.1.0-dev"
+edition       = "2024"
+rust-version  = "1.85"
+license       = "Apache-2.0"
+repository    = "https://github.com/sgpopuri/riftgate"
+homepage      = "https://github.com/sgpopuri/riftgate"
+authors       = ["Sriram Popuri"]
+
+# Shared dependency versions.
+# Every member crate pulls these via `dep_name = { workspace = true }` so the
+# workspace is the single source of truth for upstream versions.
+[workspace.dependencies]
+# Async runtime + IO. ADR 0003 pins us to tokio multi-thread; ADR 0002 starts
+# the IO subsystem on epoll (via mio).
+tokio        = { version = "1.40",  features = ["full"] }
+mio          = { version = "1.0",   features = ["os-poll", "net"] }
+
+# Lock-free queues. ADR 0005 picks crossbeam-channel for the v0.1 sharded MPMC.
+crossbeam-channel = "0.5"
+
+# Per-request bump arena. ADR 0006 picks bumpalo as the BumpArena backing.
+bumpalo      = { version = "3.16",  features = ["collections"] }
+
+# HTTP/1.1 + SSE. ADR 0007 uses httparse for headers; ADR 0008 ships SSE only.
+hyper        = { version = "1.4",   features = ["full"] }
+hyper-util   = { version = "0.1",   features = ["full"] }
+httparse     = "1.10"
+http         = "1.1"
+http-body    = "1.0"
+http-body-util = "0.1"
+
+# TLS for upstream. NFR-SEC03 requires TLS by default; rustls keeps us
+# openssl-free.
+rustls           = "0.23"
+rustls-pemfile   = "2.1"
+hyper-rustls     = { version = "0.27", features = ["http1", "http2"] }
+tokio-rustls     = "0.26"
+webpki-roots     = "0.26"
+
+# Configuration. ADR 0012 picks serde + toml as the v0.1 config substrate;
+# ArcSwap holds the snapshot from day one for forward-compatible hot reload.
+serde        = { version = "1",     features = ["derive"] }
+serde_json   = "1"
+toml         = "0.8"
+arc-swap     = "1.7"
+
+# Observability. ADR 0011 ships OtelSink (OTLP/gRPC via tonic) + MultiSink
+# over a bounded MPSC bus.
+opentelemetry         = { version = "0.27", features = ["trace", "metrics"] }
+opentelemetry_sdk     = { version = "0.27", features = ["trace", "metrics", "rt-tokio"] }
+opentelemetry-otlp    = { version = "0.27", features = ["grpc-tonic", "trace", "metrics"] }
+tonic                 = { version = "0.12", features = ["tls", "tls-roots"] }
+tracing               = "0.1"
+tracing-subscriber    = { version = "0.3",  features = ["env-filter", "json", "fmt"] }
+
+# Error handling.
+thiserror    = "2"
+
+# Bytes + futures.
+bytes        = "1"
+futures-util = "0.3"
+pin-project  = "1"
+
+# CLI.
+clap         = { version = "4.5",   features = ["derive", "env"] }
+
+# Dev / bench / fuzz.
+criterion    = { version = "0.5",   features = ["async_tokio"] }
+proptest     = "1.5"
+tempfile     = "3.10"
+
+# Workspace-wide lint policy.
+#
+# Goal: the contributor sees lints surface immediately on local `cargo
+# clippy`, but CI is the gate that fails the build. We enable the standard
+# clippy groups (`all`) at warn-level here; CI runs `cargo clippy --workspace
+# --all-targets --deny warnings` so that any new warning fails CI without
+# poisoning local development.
+#
+# Member crates that legitimately need `unsafe` (e.g. a future hand-rolled
+# lock-free queue) override `unsafe_code` locally with a justifying comment.
+[workspace.lints.rust]
+unsafe_code         = "deny"
+missing_docs        = "warn"
+unreachable_pub     = "warn"
+# Lint groups (vs individual lints) need a lower priority so individual
+# overrides can win.
+rust_2024_compatibility = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+# Default workspace lint posture: clippy::all at warn level. Pedantic /
+# nursery / restriction lints are intentionally NOT enabled at the
+# workspace level because they generate too much noise to be a CI gate.
+# A specific crate can opt-in per-module with `#![warn(clippy::pedantic)]`
+# when the extra signal is worth the cost.
+all = { level = "warn", priority = -1 }
+
+# Release profile tuning. We optimize for binary size on the main `riftgate`
+# binary later; the workspace defaults stay conservative.
+[profile.release]
+lto              = "thin"
+codegen-units    = 1
+panic            = "abort"
+strip            = "symbols"
+
+[profile.bench]
+inherits = "release"
+debug    = true   # criterion needs symbol info for flamegraphs
+strip    = "none"
+
+# Test profile keeps debug info so loom / proptest backtraces are useful.
+[profile.test]
+opt-level = 1

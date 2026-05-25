@@ -1,0 +1,43 @@
+[package]
+name         = "riftgate-core"
+description  = "Riftgate kernel trait surface and shared types. The pluggability seam every other Riftgate crate plugs into."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+readme       = "README.md"
+keywords     = ["riftgate", "gateway", "ai", "llm", "kernel"]
+categories   = ["network-programming", "asynchronous"]
+
+[dependencies]
+# Per-request bump arena substrate. ADR 0006 makes BumpArena the hot-path
+# allocator for v0.1; bumpalo encapsulates the unsafe code so this crate stays
+# `#![deny(unsafe_code)]`.
+bumpalo  = { workspace = true }
+
+# Used by the cancellation-set in BinaryHeapTimers; available without an extra
+# dep because thiserror pulls it transitively, but we declare it explicitly for
+# readability.
+thiserror = { workspace = true }
+
+# Tracing macros for the in-core LoggingFilter and the InMemorySink helper.
+# These are zero-cost when the subscriber drops events.
+tracing  = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name    = "timers"
+harness = false
+
+[[bench]]
+name    = "allocator"
+harness = false
+
+[lints]
+workspace = true

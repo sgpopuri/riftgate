@@ -1,6 +1,19 @@
 # benchmarks/
 
-Reproducible benchmark harness. **Empty during the `v0.0` public design phase.** Benchmarks land alongside the corresponding milestone in [`../docs/02-mvp-roadmap.md`](../docs/02-mvp-roadmap.md).
+Reproducible benchmark harness. The v0.1 microbenchmarks ship per-crate as criterion benches under [`../crates/`](../crates/); shared cross-crate harnesses live in this directory as they land. Benchmarks are added alongside the corresponding milestone in [`../docs/02-mvp-roadmap.md`](../docs/02-mvp-roadmap.md).
+
+## v0.1 benchmarks (shipped)
+
+These run with `cargo bench -p <crate>` from the workspace root:
+
+| Benchmark | Crate | Path |
+|-----------|-------|------|
+| `accept_echo` | `riftgate-io-epoll` | [`../crates/riftgate-io-epoll/benches/accept_echo.rs`](../crates/riftgate-io-epoll/benches/accept_echo.rs) |
+| `http1` | `riftgate-parser` | [`../crates/riftgate-parser/benches/http1.rs`](../crates/riftgate-parser/benches/http1.rs) |
+| `sse` | `riftgate-parser` | [`../crates/riftgate-parser/benches/sse.rs`](../crates/riftgate-parser/benches/sse.rs) |
+| `timers` | `riftgate-core` | [`../crates/riftgate-core/benches/timers.rs`](../crates/riftgate-core/benches/timers.rs) |
+| `allocator` | `riftgate-core` | [`../crates/riftgate-core/benches/allocator.rs`](../crates/riftgate-core/benches/allocator.rs) |
+| `end_to_end` | `riftgate` | [`../crates/riftgate/benches/end_to_end.rs`](../crates/riftgate/benches/end_to_end.rs) |
 
 ## Discipline
 
@@ -16,9 +29,6 @@ The Riftgate brand explicitly opposes vendor-style benchmark claims. Every publi
 
 | Benchmark | Lands at | Purpose |
 |-----------|----------|---------|
-| `accept_throughput` | v0.1 | Bare accept-loop throughput; baselines our IO subsystem. |
-| `parser_throughput` | v0.1 | HTTP/1.1 + SSE parser throughput on captured traffic. |
-| `arena_alloc_cost` | v0.1 | Per-request arena vs system allocator microbench. |
 | `mpmc_queue_scaling` | v0.2 | Lock-free MPMC queue scaling vs core count. |
 | `epoll_vs_io_uring` | v0.2 | Honest A/B between IO backends on the same workload. |
 | `circuit_breaker_overhead` | v0.2 | Circuit breaker per-request cost. |

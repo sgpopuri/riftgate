@@ -2,7 +2,7 @@
 
 > Backend selection: which backend gets which request. Pluggable strategies behind a single trait.
 >
-> Status: **outline-stage**. Filled out as `v0.2` (RR, weighted) and `v0.3` (KV-aware, hedged) land.
+> Status: **shipped (v0.1, RoundRobin + ConstantRouter)**. Weighted, KV-aware, and hedged routers land in v0.2 / v0.3 behind the same trait.
 
 ## Purpose
 
@@ -10,34 +10,43 @@ Decide which backend (or backends) should serve each request, given the current 
 
 ## Trait surface
 
+The shipped trait — see [`crates/riftgate-core/src/router.rs`](../../crates/riftgate-core/src/router.rs):
+
 ```rust
-// Sketch
 pub enum RoutingDecision {
     Send(BackendId),
-    Hedge(Vec<BackendId>),       // race; first to respond wins
+    Hedge(Vec<BackendId>),
     Reject(StatusCode),
 }
 
 pub struct BackendSignal {
     pub circuit_state: CircuitState,
-    pub gpu_pressure: Option<f32>,        // 0.0-1.0, if available (v0.4+)
+    pub gpu_pressure: Option<f32>,
     pub recent_p99_ms: f32,
 }
 
 pub trait Router: Send + Sync {
-    fn route(&self, req: &Request, pool: &BackendPool, signals: &BackendSignals) -> RoutingDecision;
+    fn route(
+        &self,
+        req: &Request,
+        pool: &BackendPool,
+        signals: &BackendSignals,
+    ) -> RoutingDecision;
     fn on_response(&self, _decision: &RoutingDecision, _outcome: &Outcome) {}
 }
 ```
+
+The trait is `Send + Sync` (unlike `AsyncIO` and `TimerSubsystem`) because a single `Arc<dyn Router>` is shared across all shards. This is fine: `RoundRobinRouter` uses an `AtomicUsize` cursor; future stateful impls (`KvAwareRouter`) will use lock-free or sharded structures.
 
 ## Implementations
 
 | Impl | Status | Source crate | Notes |
 |------|--------|--------------|-------|
-| `RoundRobinRouter` | `v0.1` | `riftgate-router` | Trivial. The default. |
-| `WeightedRandomRouter` | `v0.2` | `riftgate-router` | Per-backend weights. |
-| `KvAwareRouter` | `v0.3` | `riftgate-router` | Integrates with `vllm-router` LMCache OR uses an internal prefix trie. |
-| `HedgedRouter` | `v0.3` | `riftgate-router` | Wraps any inner router; emits `Hedge(...)` decisions. |
+| `RoundRobinRouter` | shipped (v0.1, default) | `riftgate-router` | Atomic cursor over `BackendPool`. The v0.1 default for the binary. Statistical fairness verified by [`crates/riftgate-router/tests/fairness.rs`](../../crates/riftgate-router/tests/fairness.rs). |
+| `ConstantRouter` | shipped (v0.1) | `riftgate-router` | Always returns `Send(backend_id)`. Used as a test harness so other crates can verify routing-agnostic behavior. |
+| `WeightedRandomRouter` | v0.2 | `riftgate-router` | Per-backend weights. |
+| `KvAwareRouter` | v0.3 | `riftgate-router` | Integrates with `vllm-router` LMCache or uses an internal prefix trie. |
+| `HedgedRouter` | v0.3 | `riftgate-router` | Wraps any inner router; emits `Hedge(...)` decisions. |
 
 Decision rationale: [Options 010 (routing strategy)](../05-options/010-routing-strategy.md).
 

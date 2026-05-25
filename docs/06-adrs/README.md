@@ -30,9 +30,12 @@ Each ADR captures a decision: context, decision, consequences. Format is Michael
 | 0007 | [Hand-rolled table-driven FSM in riftgate-parser; httparse for headers in v0.1; full FSM in v0.2](0007-handrolled-fsm-parser.md) | accepted | 2026-05-03 | [007-protocol-parser](../05-options/007-protocol-parser.md) |
 | 0008 | [SSE as the only v0.1 streaming framing; NDJSON optional in v0.2+; gRPC bidi deferred to v1.0+](0008-sse-default-grpc-future.md) | accepted | 2026-05-03 | [008-stream-framing](../05-options/008-stream-framing.md) |
 | 0009 | [Rate limiter trait + in-proc token-bucket only in v0.2; distributed impls deferred](0009-rate-limiter-trait-in-proc-only.md) | proposed | TBD (target: open of `v0.2`) | [021-rate-limiting](../05-options/021-rate-limiting.md) |
+| 0010 | [Binary-heap timer subsystem in v0.1; hierarchical wheel in v0.2 behind the same trait](0010-binary-heap-timers-v01-hierarchical-wheel-v02.md) | accepted | 2026-05-10 | [006-timer-subsystem](../05-options/006-timer-subsystem.md) |
+| 0011 | [ObservabilitySink trait + bounded-MPSC bus + OtelSink + MultiSink in v0.1](0011-otel-default-sink-multisink-fanout.md) | accepted | 2026-05-10 | [013-observability-sink](../05-options/013-observability-sink.md) |
+| 0012 | [Static TOML configuration with env-var overrides; safe-subset hot reload deferred to v0.2 / v0.3; CRDs in v1.0](0012-static-toml-env-override-v01.md) | accepted | 2026-05-10 | [015-config-model](../05-options/015-config-model.md) |
 | 0015 | [MCP as a first-class citizen of the extension plane (gateway-as-broker)](0015-mcp-extension-plane-broker.md) | proposed | TBD (target: open of `v0.5`) | [026-mcp-orchestration](../05-options/026-mcp-orchestration.md) |
 
-Numbers `0010`–`0014` and `0016`–`0020` are reserved in order for the remaining Options docs and will be written as each decision lands. ADRs `0009` and `0015` are listed above as `proposed` because their Options docs are already authored and their decisions are already framed; both will move to `accepted` at the open of the milestones that ship their respective implementations (`v0.2` for `0009`, `v0.5` for `0015`).
+Numbers `0013`, `0014`, and `0016`–`0020` are reserved in order for the remaining Options docs and will be written as each decision lands. ADRs `0009` and `0015` are listed above as `proposed` because their Options docs are already authored and their decisions are already framed; both will move to `accepted` at the open of the milestones that ship their respective implementations (`v0.2` for `0009`, `v0.5` for `0015`).
 
 ## Status legend
 

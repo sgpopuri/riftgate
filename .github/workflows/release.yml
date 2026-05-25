@@ -1,0 +1,43 @@
+# Riftgate release pipeline.
+#
+# Triggered only on `v*` tags. Builds release binaries, runs the full test
+# suite, and (in v0.1+) publishes to crates.io in dependency order.
+#
+# This workflow is intentionally minimal until Phase K of the v0.1 plan; it
+# exists now so contributors can see the shape and so a tag push doesn't
+# silently no-op.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: release build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace --release
+      - run: cargo test  --workspace --all-features
+
+  publish:
+    name: cargo publish (manual)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
+          echo "crates.io publish is intentionally a manual step in v0.x."
+          echo "Run \`cargo publish\` in dependency order from the maintainer's"
+          echo "workstation against a CARGO_REGISTRY_TOKEN."
+          exit 0

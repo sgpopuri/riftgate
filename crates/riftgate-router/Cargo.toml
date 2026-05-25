@@ -1,0 +1,19 @@
+[package]
+name         = "riftgate-router"
+description  = "Riftgate Router impls: RoundRobinRouter (v0.1) + ConstantRouter (test impl). Future v0.2/v0.3 routers (weighted-random, KV-aware, hedged) land here behind the same trait."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+readme       = "README.md"
+keywords     = ["riftgate", "routing", "load-balancing"]
+categories   = ["network-programming"]
+
+[dependencies]
+riftgate-core = { path = "../riftgate-core" }
+
+[lints]
+workspace = true

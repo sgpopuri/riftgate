@@ -1,0 +1,34 @@
+# mdbook configuration for the Riftgate documentation site.
+#
+# `mdbook build` reads `docs/SUMMARY.md` as the table of contents and walks
+# every linked file under `docs/`. CI runs `mdbook build` and fails on any
+# broken link or missing referenced file (FR-X04 in
+# docs/01-requirements/functional.md).
+
+[book]
+title       = "Riftgate"
+description = "A programmable AI data plane: Rust kernel + WASM extensions + eBPF observability."
+authors     = ["Sriram Popuri"]
+language    = "en"
+multilingual = false
+src         = "docs"
+
+[output.html]
+default-theme       = "rust"
+preferred-dark-theme = "ayu"
+git-repository-url  = "https://github.com/sgpopuri/riftgate"
+edit-url-template   = "https://github.com/sgpopuri/riftgate/edit/main/{path}"
+mathjax-support     = false
+
+[output.html.fold]
+enable = true
+level  = 1
+
+[output.html.search]
+enable          = true
+limit-results   = 30
+use-boolean-and = true
+
+[preprocessor.links]
+
+[preprocessor.index]

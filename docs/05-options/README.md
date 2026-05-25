@@ -26,16 +26,16 @@ This is the moat. Read a few entries to get the project's flavor before contribu
 | 003 | [concurrency model](003-concurrency-model.md) | recommended | [0004](../06-adrs/0004-per-shard-default-stealing-opt-in.md) | work-stealing, shared-nothing per-shard isolation, lock-free structures |
 | 004 | [request queue](004-request-queue.md) | recommended | [0005](../06-adrs/0005-sharded-mpmc-queue.md) | lock-free structures, MPMC queues, sharded-queue patterns |
 | 005 | [allocator](005-allocator.md) | recommended | [0006](../06-adrs/0006-bump-arena-plus-system-malloc.md) | memory allocators (jemalloc / mimalloc / arenas) |
-| 006 | timer subsystem | TBD | TBD | hierarchical / hashed timer wheels |
+| 006 | [timer subsystem](006-timer-subsystem.md) | recommended | [0010](../06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md) | binary heaps, hashed / hierarchical timer wheels (Varghese & Lauck), `timerfd` / `kevent` `EVFILT_TIMER` |
 | 007 | [protocol parser](007-protocol-parser.md) | recommended | [0007](../06-adrs/0007-handrolled-fsm-parser.md) | FSM-based protocol parsing |
 | 008 | [stream framing](008-stream-framing.md) | recommended | [0008](../06-adrs/0008-sse-default-grpc-future.md) | ring buffers and zero-copy I/O, FSM-based parsing |
 | 009 | request log | TBD | TBD | LSM trees, write-ahead logging |
 | 010 | routing strategy | TBD | TBD | sidecar / ambassador patterns, KV-aware prefix routing |
 | 011 | circuit breaker | TBD | TBD | resilience patterns (Nygard *Release It*) |
 | 012 | backpressure policy | TBD | TBD | backpressure as policy, drop-on-full ring buffers |
-| 013 | observability sink | TBD | TBD | OTel exporters, eBPF |
+| 013 | [observability sink](013-observability-sink.md) | recommended | [0011](../06-adrs/0011-otel-default-sink-multisink-fanout.md) | OpenTelemetry / OTLP, Prometheus exposition format, bounded ring-buffer drop-on-full (LMAX Disruptor lineage), eBPF (later) |
 | 014 | eBPF integration | TBD | TBD | eBPF (Aya, libbpf, bpftrace) |
-| 015 | configuration model | TBD | TBD | configuration patterns (static TOML, hot-reload, CRD) |
+| 015 | [configuration model](015-config-model.md) | recommended | [0012](../06-adrs/0012-static-toml-env-override-v01.md) | layered configuration (defaults → file → env), twelve-factor configuration, `serde` + `toml`, file-watch hot reload (`inotify` / `kevent` `EVFILT_VNODE`), Kubernetes CRDs |
 | 016 | extension mechanism | TBD | TBD | sandboxed extension surfaces (WASM via wasmtime) |
 | 017 | multitenancy | TBD | TBD | tenant-isolation patterns |
 | 018 | deployment | TBD | TBD | sidecar / ambassador deployment patterns |

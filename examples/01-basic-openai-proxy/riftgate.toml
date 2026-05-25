@@ -1,0 +1,26 @@
+# examples/01-basic-openai-proxy/riftgate.toml
+#
+# Smallest config that exercises every v0.1 functional requirement.
+# See the example README for what to look for once it's running.
+
+[server]
+listen_addr    = "localhost:8080"
+# `worker_threads` left unset so Tokio autodetects the CPU count.
+
+[backend]
+url            = "https://api.openai.com"
+# Set RIFTGATE_BACKEND_AUTH_HEADER="Bearer sk-..." in the environment.
+# `auth_header` left empty here so the secret never lives on disk.
+timeout_ms     = 30_000
+
+[timer]
+tick_resolution_ms = 10
+
+[obs]
+otel_endpoint  = "http://localhost:4317"
+sample_rate    = 0.01
+bus_capacity   = 4096
+
+[log]
+level          = "info"
+format         = "json"

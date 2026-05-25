@@ -1,12 +1,12 @@
 # examples/
 
-Sample configurations and deployment manifests. **Empty during the `v0.0` public design phase.** Examples land alongside the corresponding milestone in [`../docs/02-mvp-roadmap.md`](../docs/02-mvp-roadmap.md).
+Sample configurations and deployment manifests. The first example ([`01-basic-openai-proxy`](01-basic-openai-proxy/)) ships with the v0.1 walking skeleton; the others land alongside the corresponding milestone in [`../docs/02-mvp-roadmap.md`](../docs/02-mvp-roadmap.md).
 
-## Planned examples
+## Examples
 
-| Example | Lands at |
-|---------|----------|
-| `01-basic-openai-proxy/` — single-backend OpenAI-compatible proxy | v0.1 |
+| Example | Status |
+|---------|--------|
+| [`01-basic-openai-proxy/`](01-basic-openai-proxy/) — single-backend OpenAI-compatible proxy with OTel collector docker-compose | shipped (v0.1) |
 | `02-multi-backend-routing/` — round-robin and weighted-random across backends | v0.2 |
 | `03-with-circuit-breaker/` — adaptive backpressure, 503 with `Retry-After` | v0.2 |
 | `04-wasm-pii-filter/` — minimal WASM filter that redacts emails from prompts | v0.3 |

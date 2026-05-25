@@ -2,7 +2,7 @@
 
 > Append-only request log capturing every (request, response) pair for replay, eval generation, and post-mortem debugging.
 >
-> Status: **outline-stage**. Filled out as `v0.2` (basic WAL) and `v1.0` (replay framework) land.
+> Status: **v0.1 ships the trait only** — `WAL` lives in `crates/riftgate-core/src/wal.rs` with no production impl. `FileWal` lands in v0.2 per [Options 009](../05-options/009-request-log.md); the replay framework lands in v1.0.
 
 ## Purpose
 

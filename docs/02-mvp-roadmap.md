@@ -8,15 +8,23 @@
 
 > _**Project context (read every session):**_
 >
-> - **Active milestone:** `v0.1` — walking skeleton (first Rust binary). Awaiting kickoff; no Rust code yet.
-> - **Recently shipped (`v0.0` close-out, 2026-05-03):** Options docs `001`-`005`, `007`, `008` accepted; ADRs `0001`-`0008` accepted. Vision, requirements, HLD, all four plane narratives, ten LLD skeletons, glossary, the two research-pass docs (Options `021` rate-limiting + LLD; Options `026` MCP orchestration + LLD; ADRs `0009` and `0015` carry `proposed` status pending the open of `v0.2` and `v0.5` respectively), and the [`v0.0` retrospective](02a-v0.0-retrospective.md). Repo published at https://github.com/sgpopuri/riftgate; `v0.0` tagged.
-> - **In flight:** _(none yet; `v0.1` starts with three remaining prerequisite Options docs — `006-timer-subsystem`, `013-observability-sink`, `015-config-model` — and the first `crates/riftgate-core` trait surface scaffolding derived from the LLDs)_
-> - **Open questions:**
->   - Domain availability check for `riftgate.io` / `riftgate.dev` / `riftgate.com` — still not done. Recommended pre-`v0.1`-publication decision item; the project ships fine without a custom domain, but if one is intended it should be reserved before broader announcement.
->   - eBPF library choice (Options `014`: bpftrace vs libbpf vs Aya) — sequencing TBD; explicitly `v0.4` work, no `v0.1` blocker.
+> - **Active milestone:** `v0.2` — production scheduler, in-proc rate limiter, file WAL. Planning in flight; no code yet. The full v0.2 deliverable list lives in the [v0.2 section below](#v02--production-edges).
+> - **Recently shipped (`v0.1` walking skeleton, tagged 2026-05-10):** the entire walking-skeleton implementation is in. Seven crates (`riftgate-core`, `riftgate-io-epoll`, `riftgate-parser`, `riftgate-config`, `riftgate-router`, `riftgate-obs`, `riftgate`) compile, test, and run end-to-end against a real OpenAI-shaped backend with SSE streaming, OTel tracing, `/health` + `/ready`, and SIGTERM drain. Six criterion benchmarks are in. The [`examples/01-basic-openai-proxy`](../examples/01-basic-openai-proxy/) dev loop is in. Three new Options docs ([`006`](05-options/006-timer-subsystem.md), [`013`](05-options/013-observability-sink.md), [`015`](05-options/015-config-model.md)) and three new ADRs ([`0010`](06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md), [`0011`](06-adrs/0011-otel-default-sink-multisink-fanout.md), [`0012`](06-adrs/0012-static-toml-env-override-v01.md)) are accepted. The full close-out narrative lives in the [`v0.1` retrospective](02b-v0.1-retrospective.md).
+> - **In flight (`v0.2` preparation):**
+>   - Three new Options docs: `010-routing-strategy` (weighted random + KV-aware), `012-backpressure` (queue-saturation + adaptive concurrency), and the `v0.2` rate-limiting Options doc ([`021`](05-options/021-rate-limiting.md) is the foundation; the `v0.2` doc names the `TokenBucketLimiter` parameters).
+>   - Promote ADR [`0009` (rate-limiter trait + in-proc-only impl)](06-adrs/0009-rate-limiter-trait-in-proc-only.md) from `proposed` to `accepted` once the v0.2 plan opens.
+>   - First implementation phase: `crates/riftgate-core/src/scheduler.rs` and `crates/riftgate-core/src/queue.rs` get production impls (`PerCoreScheduler`, `MpmcQueue`, `ShardedMpmcQueue`); the v0.1 binary migrates from the tokio runtime to `PerCoreScheduler` behind a feature flag for the migration window.
+> - **Open questions (carried forward from `v0.1` close-out):**
+>   - Domain availability for `riftgate.io` / `riftgate.dev` / `riftgate.com` — still not reserved. Recommended pre-broader-announcement decision.
+>   - `BumpArena` pooling shape — per-shard or shared. `v0.2` decides once measured.
+>   - `HierarchicalWheel` cutover criteria — `v0.2` plan should name a schedule/cancel/tick threshold above which `BinaryHeapTimers` is no longer acceptable.
+>   - eBPF library choice (Options `014`: bpftrace vs libbpf vs Aya) — explicitly `v0.4` work; no `v0.2` blocker.
 >   - At `v0.2` retro: whether to pursue Options `022` (priority / fairness scheduling).
 >   - At `v0.4` retro: whether to pursue Options `029` (async telemetry pipeline).
-> - **Recent learnings:** `v0.0` closed cleanly with the remaining six Options docs and ADRs landed in one close-out batch. The naming refinement from `PerCoreScheduler` (LLD's outline-stage term) to `PerShardScheduler` ([ADR 0004](06-adrs/0004-per-shard-default-stealing-opt-in.md) final term) was deliberate: the `v0.1` reality is M logical shards on N Tokio threads with no pinning; physical thread-per-core ([ADR 0003](06-adrs/0003-tokio-multithread-default.md) revisit at `v0.2` retro) is a deployment-shape question, not a scheduler-trait question. Competitive landscape research (Apr-May 2026) confirmed TensorZero, Helicone, Envoy AI Gateway, vllm-router/kvfleet/llm-d-kv-cache are serious incumbents. A follow-up 2026-05 research pass added two committed scope items: an in-proc-only rate limiter (behind a trait that can accept a distributed impl later) and first-class MCP capability brokering as a new `v0.5` milestone. Vision `§4` and `§8` (known extension points / deferred hooks) record what we deliberately declined (multi-provider adapters, semantic-cache reference impl, distributed state substrate).
+> - **Recent learnings (the `v0.1` retrospective is the canonical surface):**
+>   - The trait surfaces designed in Phase C survived implementation almost unchanged. Two design adjustments — `AsyncIO` and `Allocator::reset` taking `&mut self` — were both documented as risks in the LLDs and surfaced in week one.
+>   - The pragmatic concession was binary-side: the v0.1 binary uses tokio + hyper for the actual HTTP server and client (per ADRs `0003` / `0007`), with `riftgate-io-epoll` and `riftgate-parser` shipping as the alternative impls behind their traits. The `SseFramer` *is* exercised on the upstream response body for token observation, so the trait isn't theoretical.
+>   - Per-crate bench layout (rather than a consolidated `crates/riftgate/benches/`) means `cargo bench -p riftgate-core` runs the relevant subset without compiling the full dependency graph; keep this pattern.
 >
 > _Update this section in every session that ships meaningful progress. This is the live project-context surface for the context harness defined in [`AGENTS.md`](../AGENTS.md)._
 
@@ -59,7 +67,7 @@ Prove the documentation-first methodology works publicly. **One GitHub watcher =
 
 ## v0.1 — Walking skeleton
 
-A single Rust binary that proxies real OpenAI-format traffic to one backend with SSE streaming. The minimum useful gateway.
+A single Rust binary that proxies real OpenAI-format traffic to one backend with SSE streaming. The minimum useful gateway. **Shipped 2026-05-10; close-out narrative in [`02b-v0.1-retrospective.md`](02b-v0.1-retrospective.md).**
 
 ### Foundational principles
 - Unix I/O multiplexing (`epoll` basics), reactor pattern, lock-free MPMC queues for the request queue, ring buffers for SSE response framing, FSM-based protocol parsing, per-request bump-arena allocation, hashed timer wheels for per-request deadlines.
@@ -68,12 +76,14 @@ A single Rust binary that proxies real OpenAI-format traffic to one backend with
 FR-001 through FR-008 (see [`01-requirements/functional.md`](01-requirements/functional.md))
 
 ### Subsystems landing
-- `crates/riftgate-core` — trait surface (`AsyncIO`, `Scheduler`, `Queue`, `Allocator`, `TimerSubsystem`, `WAL`, `Filter`, `Router`)
-- `crates/riftgate-io-epoll` — first `AsyncIO` impl
-- `crates/riftgate-parser` — FSM-based HTTP/SSE parser
-- `crates/riftgate-router` — round-robin only
-- `crates/riftgate-obs` — OTel exporter
-- `crates/riftgate` — main binary
+- `crates/riftgate-core` — trait surface (`AsyncIO`, `Scheduler`, `Queue`, `Allocator`, `TimerSubsystem`, `Filter`, `Router`, `ObservabilitySink`) plus the impl-only-deferred traits (`RateLimiter`, `WAL`, `CapabilityBroker`); in-core impls for `SystemAllocator`, `BumpArena`, `BinaryHeapTimers`, `DeterministicTimers`, `IdentityFilter`, `LoggingFilter`, `InMemorySink`
+- `crates/riftgate-io-epoll` — first `AsyncIO` impl (mio under the hood; `epoll(7)` on Linux, `kqueue(2)` on macOS/BSD)
+- `crates/riftgate-parser` — FSM-based HTTP/1.1 + SSE parser (`Http1Parser` + `SseFramer`)
+- `crates/riftgate-config` — TOML schema + env-override loader + fail-loudly validation + `Secret<T>` redaction
+- `crates/riftgate-router` — `RoundRobinRouter` (atomic-cursor) and `ConstantRouter` (test impl)
+- `crates/riftgate-obs` — bounded MPSC bus with drop-on-full + `OtelSink` (OTLP/gRPC) + `JsonStdoutSink` + `MultiSink` fan-out + canonical span-name registry
+- `crates/riftgate` — main binary: tokio multi-thread runtime, accept loop, hyper-rustls upstream client, SSE forwarding, `/health` + `/ready`, SIGTERM drain
+- [`examples/01-basic-openai-proxy`](../examples/01-basic-openai-proxy/) — self-contained dev loop with OTel collector docker-compose
 
 ### Options docs and ADRs depended on
 Options/ADRs 001-008 from `v0.0`, plus:
@@ -83,6 +93,9 @@ Options/ADRs 001-008 from `v0.0`, plus:
 
 ### Goal metric
 Someone outside the project can `cargo install riftgate` (or build from source) and proxy real OpenAI-format traffic. ~100 GitHub stars. A second person opens a non-trivial issue.
+
+### Retrospective
+- [`02b-v0.1-retrospective.md`](02b-v0.1-retrospective.md) — what shipped, what went well, what we missed and fixed in close-out, what's open at `v0.1` close, process notes for `v0.2` and beyond.
 
 ---
 

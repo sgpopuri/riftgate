@@ -1,0 +1,32 @@
+[package]
+name         = "riftgate-parser"
+description  = "Riftgate StreamParser impls: Http1Parser (HTTP/1.1 request parser, httparse for headers + FSM for body) and SseFramer (Server-Sent Events)."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+readme       = "README.md"
+keywords     = ["riftgate", "http", "sse", "parser", "fsm"]
+categories   = ["network-programming", "parsing"]
+
+[dependencies]
+riftgate-core = { path = "../riftgate-core" }
+httparse      = { workspace = true }
+
+[dev-dependencies]
+proptest  = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name    = "http1"
+harness = false
+
+[[bench]]
+name    = "sse"
+harness = false
+
+[lints]
+workspace = true

@@ -1,0 +1,18 @@
+# examples/01-basic-openai-proxy/docker-compose.yml
+#
+# Bring up an OTel collector that receives OTLP/gRPC on :4317 and
+# prints every span to stdout. Useful for the v0.1 walking-skeleton
+# dev loop; replace the `debug` exporter with `otlphttp` /
+# `prometheus` for a real backend.
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector:0.116.0
+    container_name: riftgate-otel-collector
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+    ports:
+      - "localhost:4317:4317"   # OTLP/gRPC
+      - "localhost:4318:4318"   # OTLP/HTTP (unused by riftgate v0.1)
+    restart: "no"

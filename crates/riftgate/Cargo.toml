@@ -1,0 +1,86 @@
+[package]
+name         = "riftgate"
+description  = "Riftgate: a programmable Rust gateway for OpenAI-compatible LLM traffic. v0.1 walking-skeleton binary."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+readme       = "README.md"
+keywords     = ["riftgate", "gateway", "llm", "openai", "proxy"]
+categories   = ["network-programming", "web-programming::http-server"]
+
+# Library + binary. The library exposes the same modules the binary
+# uses so integration tests can stand the full handler stack up against
+# a mock upstream (see tests/e2e.rs).
+[lib]
+name = "riftgate"
+path = "src/lib.rs"
+
+[[bin]]
+name = "riftgate"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace crates.
+riftgate-core    = { path = "../riftgate-core" }
+riftgate-config  = { path = "../riftgate-config" }
+riftgate-router  = { path = "../riftgate-router" }
+riftgate-obs     = { path = "../riftgate-obs" }
+riftgate-parser  = { path = "../riftgate-parser" }
+
+# Async runtime + IO.
+tokio            = { workspace = true }
+
+# HTTP server + client.
+hyper            = { workspace = true }
+hyper-util       = { workspace = true }
+hyper-rustls     = { workspace = true }
+http             = { workspace = true }
+http-body        = { workspace = true }
+http-body-util   = { workspace = true }
+bytes            = { workspace = true }
+futures-util     = { workspace = true }
+pin-project      = { workspace = true }
+
+# TLS.
+rustls           = { workspace = true }
+webpki-roots     = { workspace = true }
+
+# Per-request arena. Used by the proxy handler to satisfy FR-007.
+bumpalo          = { workspace = true }
+
+# OTel SDK setup (the OtelSink in riftgate-obs writes against the global
+# tracer; the binary owns the SDK provider so it can shut it down on drain).
+opentelemetry         = { workspace = true }
+opentelemetry_sdk     = { workspace = true }
+opentelemetry-otlp    = { workspace = true }
+tonic                 = { workspace = true }
+
+# Logging subscriber.
+tracing               = { workspace = true }
+tracing-subscriber    = { workspace = true }
+
+# CLI parsing.
+clap             = { workspace = true }
+
+# JSON. Used by the proxy to validate request bodies (FR-002).
+serde_json       = { workspace = true }
+
+# Errors.
+thiserror        = { workspace = true }
+
+[dev-dependencies]
+# End-to-end tests stand the binary's library modules up against a
+# mock upstream and a real hyper client.
+tempfile         = { workspace = true }
+criterion        = { workspace = true }
+
+[[bench]]
+name    = "end_to_end"
+harness = false
+
+[lints]
+workspace = true

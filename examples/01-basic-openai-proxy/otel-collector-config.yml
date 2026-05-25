@@ -1,0 +1,29 @@
+# examples/01-basic-openai-proxy/otel-collector-config.yml
+#
+# Receive OTLP/gRPC traces from riftgate and print them to the
+# collector's stdout. v0.1 only emits trace spans; metrics + profiles
+# arrive in v0.2 and v0.4 respectively.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: localhost:4317
+      http:
+        endpoint: localhost:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 256
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers:  [otlp]
+      processors: [batch]
+      exporters:  [debug]

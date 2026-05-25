@@ -1,0 +1,3 @@
+[backend]
+url = "https://api.openai.com"
+auth_header = "Bearer test"

@@ -4,7 +4,7 @@
 
 Riftgate is a repo-first exploration of the systems decisions behind a robust LLM gateway. The goal is not to start with a grand product announcement. The goal is to make the specs, options, decisions, architecture notes, and eventually code public as the project takes shape.
 
-**Status: `v0.0` complete (2026-05-03); `v0.1` (walking skeleton — first Rust binary) is the next milestone.** No Rust code yet. The `v0.0` design surface — vision, requirements, four-plane architecture (data, control, extension, observability), ten low-level design notes, nine Options docs (the seven foundational from the original octet plus the two from the 2026-05 research pass — [`021-rate-limiting`](docs/05-options/021-rate-limiting.md), [`026-mcp-orchestration`](docs/05-options/026-mcp-orchestration.md)), eight accepted ADRs (`0001`–`0008`), and two ADRs in `proposed` status ([`0009`](docs/06-adrs/0009-rate-limiter-trait-in-proc-only.md), [`0015`](docs/06-adrs/0015-mcp-extension-plane-broker.md)) — is in the repo. The `v0.0` retrospective is captured separately in [`docs/02a-v0.0-retrospective.md`](docs/02a-v0.0-retrospective.md). `v0.1` adds the first crate scaffolding plus three remaining prerequisite Options docs (`006-timer-subsystem`, `013-observability-sink`, `015-config-model`).
+**Status: `v0.1` walking skeleton complete (tagged 2026-05-10); `v0.2` (production scheduler, in-proc rate limiter, file WAL) is the next active milestone.** The first Rust binary is in. The `v0.0` design surface — vision, requirements, four-plane architecture (data, control, extension, observability), ten low-level design notes, nine Options docs, and the foundational ADRs — is in the repo. `v0.1` adds the walking-skeleton crates (`riftgate-core`, `riftgate-io-epoll`, `riftgate-parser`, `riftgate-config`, `riftgate-router`, `riftgate-obs`, and the `riftgate` binary), three additional Options docs (`006-timer-subsystem`, `013-observability-sink`, `015-config-model`), three new ADRs (`0010`, `0011`, `0012`), six criterion benchmarks, and a self-contained [`examples/01-basic-openai-proxy`](examples/01-basic-openai-proxy/) dev loop. Retrospectives: [`v0.0`](docs/02a-v0.0-retrospective.md), [`v0.1`](docs/02b-v0.1-retrospective.md).
 
 ## Why Riftgate exists
 
@@ -24,7 +24,7 @@ The design bet is a small Rust core where major subsystems are swappable behind 
 - Not a TensorZero killer. We will not promise to beat it on raw P99.
 - Not an Envoy AI Gateway replacement. We will not match its ecosystem maturity.
 - Not a vLLM-class KV-cache router. We integrate with `vllm-router` and `llm-d-kv-cache` where users want that fidelity.
-- Not yet production-ready. Not even `v0.1`. Read [docs/02-mvp-roadmap.md](docs/02-mvp-roadmap.md).
+- Not yet production-ready. The `v0.1` walking skeleton proxies OpenAI-shaped traffic, streams SSE, and emits OTel — but it is not hardened for production. Read [docs/02-mvp-roadmap.md](docs/02-mvp-roadmap.md).
 
 ## Repo and writing
 
@@ -43,20 +43,25 @@ Read in this order if you are new:
 
 ## Current focus
 
-`v0.0` has accepted the foundational design decisions for the kernel:
+`v0.0` accepted the foundational design decisions for the kernel; `v0.1` shipped the walking-skeleton implementation against them. The shipped subsystems and the Options doc + ADR pair that govern each:
 
-| Subsystem | Options doc | ADR |
-|-----------|-------------|-----|
-| IO model | [`001-io-model`](docs/05-options/001-io-model.md) | [`0002`](docs/06-adrs/0002-start-on-epoll.md) |
-| Async runtime | [`002-async-runtime`](docs/05-options/002-async-runtime.md) | [`0003`](docs/06-adrs/0003-tokio-multithread-default.md) |
-| Concurrency model | [`003-concurrency-model`](docs/05-options/003-concurrency-model.md) | [`0004`](docs/06-adrs/0004-per-shard-default-stealing-opt-in.md) |
-| Request queue | [`004-request-queue`](docs/05-options/004-request-queue.md) | [`0005`](docs/06-adrs/0005-sharded-mpmc-queue.md) |
-| Allocator | [`005-allocator`](docs/05-options/005-allocator.md) | [`0006`](docs/06-adrs/0006-bump-arena-plus-system-malloc.md) |
-| Protocol parser | [`007-protocol-parser`](docs/05-options/007-protocol-parser.md) | [`0007`](docs/06-adrs/0007-handrolled-fsm-parser.md) |
-| Stream framing | [`008-stream-framing`](docs/05-options/008-stream-framing.md) | [`0008`](docs/06-adrs/0008-sse-default-grpc-future.md) |
-| Language choice | n/a (foundational) | [`0001`](docs/06-adrs/0001-rust-not-go-or-zig.md) |
+| Subsystem | Options doc | ADR | Shipped in |
+|-----------|-------------|-----|------------|
+| IO model | [`001-io-model`](docs/05-options/001-io-model.md) | [`0002`](docs/06-adrs/0002-start-on-epoll.md) | `crates/riftgate-io-epoll` (mio: epoll on Linux, kqueue on macOS) |
+| Async runtime | [`002-async-runtime`](docs/05-options/002-async-runtime.md) | [`0003`](docs/06-adrs/0003-tokio-multithread-default.md) | `crates/riftgate` (tokio multi-thread runtime) |
+| Concurrency model | [`003-concurrency-model`](docs/05-options/003-concurrency-model.md) | [`0004`](docs/06-adrs/0004-per-shard-default-stealing-opt-in.md) | trait surface in `riftgate-core` (per-shard default; production scheduler in v0.2) |
+| Request queue | [`004-request-queue`](docs/05-options/004-request-queue.md) | [`0005`](docs/06-adrs/0005-sharded-mpmc-queue.md) | trait surface in `riftgate-core` (sharded MPMC impl in v0.2) |
+| Allocator | [`005-allocator`](docs/05-options/005-allocator.md) | [`0006`](docs/06-adrs/0006-bump-arena-plus-system-malloc.md) | `BumpArena` + `SystemAllocator` in `riftgate-core` |
+| Timer subsystem | [`006-timer-subsystem`](docs/05-options/006-timer-subsystem.md) | [`0010`](docs/06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md) | `BinaryHeapTimers` in `riftgate-core` |
+| Protocol parser | [`007-protocol-parser`](docs/05-options/007-protocol-parser.md) | [`0007`](docs/06-adrs/0007-handrolled-fsm-parser.md) | `Http1Parser` in `riftgate-parser` |
+| Stream framing | [`008-stream-framing`](docs/05-options/008-stream-framing.md) | [`0008`](docs/06-adrs/0008-sse-default-grpc-future.md) | `SseFramer` in `riftgate-parser` |
+| Observability sink | [`013-observability-sink`](docs/05-options/013-observability-sink.md) | [`0011`](docs/06-adrs/0011-mpsc-bus-with-otel-sink.md) | `OtelSink` + `JsonStdoutSink` + `MultiSink` in `riftgate-obs` |
+| Config model | [`015-config-model`](docs/05-options/015-config-model.md) | [`0012`](docs/06-adrs/0012-toml-plus-env-fail-loudly.md) | `riftgate-config` |
+| Language choice | n/a (foundational) | [`0001`](docs/06-adrs/0001-rust-not-go-or-zig.md) | Rust, stable toolchain |
 
-`v0.1` (walking skeleton) is next. See the [`v0.1` section of the MVP roadmap](docs/02-mvp-roadmap.md#v01--walking-skeleton) for the deliverable list, or the [Options index](docs/05-options/README.md) and [ADR index](docs/06-adrs/README.md) for the full decision history.
+`v0.1` close-out (retrospective, tagging, publishing) is the remaining work for this milestone; `v0.2` then takes on the custom `PerCoreScheduler`, the production timer wheel, the in-proc rate limiter, and the WAL. See the [MVP roadmap](docs/02-mvp-roadmap.md) for what ships when, the [Options index](docs/05-options/README.md), and the [ADR index](docs/06-adrs/README.md) for the full decision history.
+
+To run the walking skeleton against a mock OpenAI backend, see [`examples/01-basic-openai-proxy`](examples/01-basic-openai-proxy/).
 
 ## How to contribute
 

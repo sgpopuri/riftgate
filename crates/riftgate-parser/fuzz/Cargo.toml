@@ -1,0 +1,41 @@
+# cargo-fuzz harness for `riftgate-parser`.
+#
+# Run with `cargo +nightly fuzz run http1_request` (requires
+# `cargo install cargo-fuzz`). The fuzz target lives in
+# `fuzz/fuzz_targets/http1_request.rs`. Outputs land in `fuzz/corpus/`
+# and `fuzz/artifacts/` (both `.gitignore`-d at the repo root).
+#
+# This sub-package is intentionally NOT a workspace member; it is opt-in
+# and pulled into the build only when cargo-fuzz needs it.
+
+[package]
+name         = "riftgate-parser-fuzz"
+version      = "0.0.0"
+edition      = "2024"
+publish      = false
+
+[package.metadata]
+cargo-fuzz   = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+riftgate-parser = { path = ".." }
+riftgate-core   = { path = "../../riftgate-core" }
+
+[[bin]]
+name = "http1_request"
+path = "fuzz_targets/http1_request.rs"
+test = false
+doc  = false
+bench = false
+
+[[bin]]
+name = "sse_stream"
+path = "fuzz_targets/sse_stream.rs"
+test = false
+doc  = false
+bench = false
+
+# This sub-package is opt-in; cargo will not pick it up unless invoked
+# directly by cargo-fuzz.
+[workspace]

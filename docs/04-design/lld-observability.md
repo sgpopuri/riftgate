@@ -2,7 +2,7 @@
 
 > OTel traces, Prometheus metrics, eBPF profiles, and the token-level SLO aggregator. The observability plane in detail.
 >
-> Status: **outline-stage**. Filled out as `v0.2` (OTel + Prom) and `v0.4` (eBPF + token SLOs) land.
+> Status: **shipped (v0.1, OTel + JSON over a bounded MPSC bus)**. Prometheus, eBPF profiles, and token-level SLOs land in v0.2 / v0.4 behind the same trait.
 
 ## Purpose
 
@@ -10,14 +10,14 @@ Surface what is happening inside the gateway and at its backends, in enough deta
 
 ## Trait surface
 
+The shipped trait — see [`crates/riftgate-core/src/observability.rs`](../../crates/riftgate-core/src/observability.rs):
+
 ```rust
-// Sketch
 pub enum ObservabilityEvent {
     SpanStart { request_id: RequestId, name: &'static str, attributes: Attributes },
-    SpanEnd { request_id: RequestId, name: &'static str, duration: Duration },
-    Counter { name: &'static str, value: u64, labels: Labels },
+    SpanEnd   { request_id: RequestId, name: &'static str, duration: Duration },
+    Counter   { name: &'static str, value: u64, labels: Labels },
     Histogram { name: &'static str, value: f64, labels: Labels },
-    Profile { kind: ProfileKind, samples: Vec<ProfileSample> },     // v0.4+
 }
 
 pub trait ObservabilitySink: Send + Sync {
@@ -25,15 +25,21 @@ pub trait ObservabilitySink: Send + Sync {
 }
 ```
 
+The bus is a bounded `tokio::sync::mpsc` channel inside `crates/riftgate-obs/src/bus.rs`; the data plane only ever calls `Publisher::publish`, which is a non-blocking `try_send`. A drop is a published metric, not a stall: the `riftgate_observability_dropped_total` counter records every drop. See `crates/riftgate-obs/src/spans.rs` for the canonical span-name registry (`request.received`, `request.routed`, `request.first_token`, `request.completed`, etc.).
+
+The `Profile` variant in the v0.0 sketch was removed from the trait; eBPF profiles in v0.4 will publish via a separate sink type to keep the v0.1 enum stable.
+
 ## Implementations
 
 | Impl | Status | Source crate | Notes |
 |------|--------|--------------|-------|
-| `OtelSink` | `v0.1` | `riftgate-obs` | OTLP/gRPC export. |
-| `PrometheusSink` | `v0.2` | `riftgate-obs` | `/metrics` HTTP endpoint. |
-| `BpfSink` | `v0.4` | `riftgate-obs` | Aya-based BPF programs publish into the same channel. |
-| `TokenLevelAggregator` | `v0.4` | `riftgate-obs` | TTFT, inter-token latency, jitter histograms. |
-| `MultiSink` | `v0.1` | `riftgate-obs` | Fan-out to multiple sinks. |
+| `OtelSink` | shipped (v0.1) | `riftgate-obs` | OTLP/gRPC export via `tonic`. Translates `SpanStart` / `SpanEnd` into OpenTelemetry spans; counters and histograms are recorded on the matching meter. |
+| `JsonStdoutSink` | shipped (v0.1) | `riftgate-obs` | Structured-JSON-per-event sink for local dev and CI logs. One JSON object per line on stdout. |
+| `MultiSink` | shipped (v0.1) | `riftgate-obs` | Fan-out wrapper: `MultiSink::new(vec![otel, json])` publishes to both. |
+| `InMemorySink` | shipped (v0.1) | `riftgate-core` | Test-only sink that buffers events in a `Mutex<Vec<...>>` for assertions. |
+| `PrometheusSink` | v0.2 | `riftgate-obs` | `/metrics` HTTP endpoint. |
+| `BpfSink` | v0.4 | `riftgate-obs` | Aya-based BPF programs publish into the same channel. |
+| `TokenLevelAggregator` | v0.4 | `riftgate-obs` | TTFT, inter-token latency, jitter histograms. |
 
 Decision rationale: [Options 013 (observability sink)](../05-options/013-observability-sink.md), [Options 014 (eBPF integration)](../05-options/014-ebpf-integration.md).
 
@@ -43,29 +49,41 @@ Foundational principle: eBPF (verifier, JIT, maps, kprobes / tracepoints / XDP /
 
 ### Architecture and dependencies
 
-The data plane publishes `ObservabilityEvent` values to a bounded MPSC channel. A dedicated observability worker (or per-sink workers) consume from the channel and translate into the sink-specific format. **The data plane never blocks on the observability plane.**
+The data plane publishes `ObservabilityEvent` values to a bounded `tokio::sync::mpsc` channel via the `Publisher` handle. A single observability worker drains the channel and forwards events into a `MultiSink` that fans out to every configured sink (OTel, JSON-stdout, future Prometheus). **The data plane never blocks on the observability plane.**
 
-The eBPF sink is the inverse direction: BPF programs (running in the kernel) publish into a perf ring or BPF ring buffer that a userland thread reads and converts to `ObservabilityEvent`. This event then flows through the same channel as data-plane events.
+```text
+   data plane  ----publish (try_send)---->  bounded MPSC bus  ----worker---->  MultiSink ---->  OtelSink
+                                                                                          \--->  JsonStdoutSink
+```
+
+When the channel is full, `try_send` returns immediately, the event is dropped, and the `riftgate_observability_dropped_total` counter is incremented. This is intentional and documented as part of the contract.
+
+The eBPF sink (v0.4) is the inverse direction: BPF programs running in the kernel publish into a perf ring or BPF ring buffer; a userland thread reads them and converts to `ObservabilityEvent`. The events then flow through the same bounded MPSC bus.
 
 ### Patterns and conventions
 
-- **Drop on full.** A counter (`riftgate_observability_dropped_total`) tracks drops. We do not retry or buffer.
-- **Sampling at the source.** Per-token spans are sampled (1 in 100 by default); full per-token data is only in the WAL.
-- **Schema stability.** Trace span names and metric names are part of the public API. Renaming requires a deprecation cycle.
-- **Cardinality discipline.** No metric label is allowed to take unbounded values. `backend` is bounded by config; `model` is bounded by the registry.
+- **Drop on full.** A counter (`riftgate_observability_dropped_total`) tracks drops. The bus does not retry, does not buffer, does not block. This is the v0.1 contract per [Options 013](../05-options/013-observability-sink.md).
+- **Canonical span names.** Every span name lives in `crates/riftgate-obs/src/spans.rs` as a `&'static str` constant. Adding a span requires adding it there; the registry is the schema.
+- **Sampling at the source** (v0.4+). Per-token spans will be sampled (1 in 100 by default); full per-token data goes to the WAL, not OTel.
+- **Schema stability.** Trace span names and metric names are part of the public API. Renaming requires a deprecation cycle and a new ADR.
+- **Cardinality discipline.** No metric label is allowed to take unbounded values. `backend` is bounded by config; `model` is bounded by the registry. `request_id` is a span attribute, never a metric label.
+- **`MultiSink` is the composition primitive.** Configuring observability means constructing the sink graph at startup; sinks themselves do not know about each other.
 
 ### Pitfalls
 
-- **OTel SDK overhead.** The Rust OTel SDK has historically been the bottleneck in observability-heavy workloads. We benchmark and monitor.
-- **High-cardinality metric labels** (e.g. `request_id` as a label) are a fast path to a melted Prometheus. The `Labels` API guards against this.
-- **eBPF verifier rejections.** Aya programs can grow complex enough to fail the kernel verifier. We test against multiple kernel versions.
-- **Profiling overhead.** Even sampled BPF profiling costs a few percent CPU. We document the cost and let users opt out.
+- **OTel SDK overhead.** The Rust OTel SDK has historically been the bottleneck in observability-heavy workloads. The `request.completed` span is fired from `PinnedDrop` on the streamed-response body to ensure it lands even if the body is dropped early — the cost of getting this wrong is a leaked span, not a leaked request.
+- **High-cardinality metric labels** (e.g. `request_id` as a label) are a fast path to a melted Prometheus. The `Labels` API will guard against this when `PrometheusSink` lands; for v0.1 the convention is enforced by code review.
+- **`Publisher::publish` must be cheap.** It is called from the request hot path; the implementation is `try_send` plus a counter increment, no allocation outside the event itself.
+- **Drop counter underreports under contention.** The atomic increment is `Relaxed`; drops are measured per-shard and aggregated by the OTel exporter. Reading the counter mid-aggregation can underreport by a small bounded amount.
+- **eBPF verifier rejections** (v0.4). Aya programs can grow complex enough to fail the kernel verifier. We will test against multiple kernel versions when v0.4 lands.
+- **Profiling overhead** (v0.4). Even sampled BPF profiling costs a few percent CPU. We document the cost and let users opt out.
 
 ### Standards and review gates
 
-- New trace span names require a glossary entry.
+- New trace span names require an entry in `crates/riftgate-obs/src/spans.rs` and a corresponding glossary line in `docs/08-glossary.md`.
 - New metrics require a dashboard query example.
-- eBPF program changes require verifier-acceptance tests on Linux 5.15+ and 6.1+ at minimum.
+- The trait surface is part of the v0.1 frozen surface — changes require a new ADR superseding [ADR 0011](../06-adrs/0011-mpsc-bus-with-otel-sink.md).
+- eBPF program changes (v0.4) require verifier-acceptance tests on Linux 5.15+ and 6.1+ at minimum.
 
 ## Testing strategy
 

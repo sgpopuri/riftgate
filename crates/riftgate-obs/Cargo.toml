@@ -1,0 +1,26 @@
+[package]
+name         = "riftgate-obs"
+description  = "Riftgate observability bus and sinks. Bounded MPSC with drop-on-full + OtelSink (OTLP/gRPC) + JsonStdoutSink + MultiSink, behind the ObservabilitySink trait from riftgate-core."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+readme       = "README.md"
+keywords     = ["riftgate", "observability", "opentelemetry", "otlp"]
+categories   = ["development-tools::debugging", "asynchronous"]
+
+[dependencies]
+riftgate-core      = { path = "../riftgate-core" }
+crossbeam-channel  = { workspace = true }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+tracing            = { workspace = true }
+opentelemetry      = { workspace = true }
+opentelemetry_sdk  = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+
+[lints]
+workspace = true

@@ -38,18 +38,20 @@ You do not need to load everything every time. You **do** need to load the right
 
 The durable, theory-of-the-system knowledge for each subsystem lives next to the design docs.
 
-| Subsystem | Component context | Implementation (later) |
-|-----------|-------------------|------------------------|
-| IO runtime | [`docs/04-design/lld-io-runtime.md`](docs/04-design/lld-io-runtime.md) | `crates/riftgate-io-*` |
-| Scheduling | [`docs/04-design/lld-scheduling.md`](docs/04-design/lld-scheduling.md) | `crates/riftgate-core` |
-| Parser | [`docs/04-design/lld-parsing.md`](docs/04-design/lld-parsing.md) | `crates/riftgate-parser` |
-| Storage / WAL | [`docs/04-design/lld-storage.md`](docs/04-design/lld-storage.md) | `crates/riftgate-replay` |
-| Allocator | [`docs/04-design/lld-allocator.md`](docs/04-design/lld-allocator.md) | `crates/riftgate-core` |
-| Timers | [`docs/04-design/lld-timers.md`](docs/04-design/lld-timers.md) | `crates/riftgate-core` |
-| Routing | [`docs/04-design/lld-routing.md`](docs/04-design/lld-routing.md) | `crates/riftgate-router` |
-| Observability | [`docs/04-design/lld-observability.md`](docs/04-design/lld-observability.md) | `crates/riftgate-obs` |
-| Rate limiting | [`docs/04-design/lld-rate-limiter.md`](docs/04-design/lld-rate-limiter.md) | `crates/riftgate-core` (trait + default in-proc token-bucket impl through `v0.2`; a separate `crates/riftgate-rate-limit-*` crate emerges only if a distributed impl lands later, per [Options `021`](docs/05-options/021-rate-limiting.md)) |
-| MCP capability broker | [`docs/04-design/lld-mcp-capability.md`](docs/04-design/lld-mcp-capability.md) | `crates/riftgate-mcp` (per [Options `026`](docs/05-options/026-mcp-orchestration.md)) |
+| Subsystem | Component context | Implementation |
+|-----------|-------------------|----------------|
+| IO runtime | [`docs/04-design/lld-io-runtime.md`](docs/04-design/lld-io-runtime.md) | `crates/riftgate-io-epoll` (mio: epoll on Linux, kqueue on macOS) — shipped v0.1 |
+| Scheduling | [`docs/04-design/lld-scheduling.md`](docs/04-design/lld-scheduling.md) | trait surface in `crates/riftgate-core`; v0.1 binary uses tokio multi-thread runtime; custom `PerCoreScheduler` in v0.2 |
+| Parser | [`docs/04-design/lld-parsing.md`](docs/04-design/lld-parsing.md) | `crates/riftgate-parser` (`Http1Parser` + `SseFramer`) — shipped v0.1 |
+| Storage / WAL | [`docs/04-design/lld-storage.md`](docs/04-design/lld-storage.md) | trait in `crates/riftgate-core`; `crates/riftgate-replay` impl in v0.2 |
+| Allocator | [`docs/04-design/lld-allocator.md`](docs/04-design/lld-allocator.md) | `crates/riftgate-core` (`BumpArena` + `SystemAllocator`) — shipped v0.1 |
+| Timers | [`docs/04-design/lld-timers.md`](docs/04-design/lld-timers.md) | `crates/riftgate-core` (`BinaryHeapTimers`) — shipped v0.1 |
+| Config | [`docs/05-options/015-config-model.md`](docs/05-options/015-config-model.md) | `crates/riftgate-config` (TOML + env override + fail-loudly validator) — shipped v0.1 |
+| Routing | [`docs/04-design/lld-routing.md`](docs/04-design/lld-routing.md) | `crates/riftgate-router` (`RoundRobinRouter` + `ConstantRouter`) — shipped v0.1 |
+| Observability | [`docs/04-design/lld-observability.md`](docs/04-design/lld-observability.md) | `crates/riftgate-obs` (bounded MPSC bus + `OtelSink` + `JsonStdoutSink` + `MultiSink`) — shipped v0.1 |
+| Binary | n/a | `crates/riftgate` (tokio runtime, accept loop, hyper-rustls upstream client, SSE forwarding, `/health` + `/ready`, SIGTERM drain) — shipped v0.1 |
+| Rate limiting | [`docs/04-design/lld-rate-limiter.md`](docs/04-design/lld-rate-limiter.md) | trait in `crates/riftgate-core`; `TokenBucketLimiter` in `crates/riftgate-core` v0.2; a separate `crates/riftgate-rate-limit-*` crate emerges only if a distributed impl lands later, per [Options `021`](docs/05-options/021-rate-limiting.md) and [ADR 0009](docs/06-adrs/0009-rate-limiter-trait-in-proc-only.md) |
+| MCP capability broker | [`docs/04-design/lld-mcp-capability.md`](docs/04-design/lld-mcp-capability.md) | trait in `crates/riftgate-core`; `crates/riftgate-mcp` impl in v0.5 per [Options `026`](docs/05-options/026-mcp-orchestration.md) and [ADR 0015](docs/06-adrs/0015-mcp-extension-plane-broker.md) |
 
 Each LLD is the operating theory of one subsystem: architecture, dependencies, patterns, pitfalls, quality contract, agent guidance. Load the one(s) you'll touch. Do not infer them from nearby code.
 

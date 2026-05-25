@@ -2,7 +2,7 @@
 
 > First-class MCP (Model Context Protocol) support: parse MCP requests, enforce per-tenant tool and resource allowlists, audit every invocation via the existing WAL. The gateway as the capability ledger of the agentic era.
 >
-> Status: **outline-stage**. Filled out as `v0.5` lands.
+> Status: **v0.1 ships the trait only** — `CapabilityBroker` lives in `crates/riftgate-core/src/capability.rs` with no production impl. The `LocalAllowlistBroker` and `WalAuditedBroker` impls land in v0.5 per [ADR 0015](../06-adrs/0015-mcp-extension-plane-broker.md).
 
 ## Purpose
 

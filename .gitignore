@@ -8,6 +8,20 @@ target/
 **/*.rs.bk
 Cargo.lock.bak
 
+# mdbook output
+book/
+
+# cargo-fuzz scratch
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+
+# Local benchmark artefacts
+criterion/
+flamegraph.svg
+perf.data
+perf.data.old
+
 # OS noise
 .DS_Store
 Thumbs.db

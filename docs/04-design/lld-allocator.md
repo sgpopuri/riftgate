@@ -2,7 +2,7 @@
 
 > Per-request arena allocator. Eliminates `malloc` from the hot path. Returns all per-request memory in O(1) on completion.
 >
-> Status: **outline-stage**. Filled out as `v0.1` lands.
+> Status: **shipped (v0.1)**. `BumpArena` (bumpalo-backed) is the v0.1 default; `SystemAllocator` is retained as the safe baseline.
 
 ## Purpose
 
@@ -10,21 +10,29 @@ Make memory allocation cost predictable in the request lifecycle. The general-pu
 
 ## Trait surface
 
+The shipped trait — see [`crates/riftgate-core/src/allocator.rs`](../../crates/riftgate-core/src/allocator.rs):
+
 ```rust
-// Sketch
-pub trait Allocator: Send + Sync {
+pub trait Allocator {
     fn alloc(&self, layout: Layout) -> *mut u8;
-    fn reset(&self);  // Free everything in O(1)
+    fn reset(&mut self);
+    fn capacity(&self) -> usize;
+    fn allocated(&self) -> usize;
 }
 ```
+
+The two design adjustments from the v0.0 outline:
+
+- **`reset` takes `&mut self`** because bumpalo's `Bump::reset` requires unique access. Per-request ownership ([ADR 0004](../06-adrs/0004-per-shard-default-stealing-opt-in.md)) — each in-flight request owns its arena exclusively — makes this trivial; sharing arenas is a misuse.
+- **`capacity()` and `allocated()`** observability methods are part of the trait so the per-request observability span can record arena pressure without reaching into impl-specific state. Both are O(1).
 
 ## Implementations
 
 | Impl | Status | Source crate | Notes |
 |------|--------|--------------|-------|
-| `SystemAllocator` | `v0.1` | `riftgate-core` | Wraps the global allocator. Default for non-hot-path. |
-| `BumpArena` | `v0.1` | `riftgate-core` | Per-request arena. Bumps a pointer; resets to zero. |
-| `MimallocGlobal` | `v0.2` (opt-in) | (link in `mimalloc` crate) | Replaces the global allocator for `malloc` calls outside the arena. |
+| `BumpArena` | shipped (v0.1, default) | `riftgate-core` | Bumpalo-backed bump allocator. O(1) `alloc` / O(1) `reset`. Initial 4 KB chunk; chunks double up to a 1 MB cap, configurable via `BumpArena::with_initial_capacity`. |
+| `SystemAllocator` | shipped (v0.1) | `riftgate-core` | Wraps `std::alloc::System`. Retained for non-hot-path data structures and for differential testing. Used wherever the lifetime of the allocation outlives the request scope. |
+| `MimallocGlobal` | v0.2 (opt-in) | (link in the `mimalloc` crate) | Replaces the global allocator for `malloc` calls outside the arena. Behind a Cargo feature flag, never on by default. |
 
 Decision rationale: [Options 005 (allocator)](../05-options/005-allocator.md).
 
@@ -34,35 +42,39 @@ Foundational principles: bump-pointer arena allocators (Postgres memory contexts
 
 ### Architecture and dependencies
 
-The allocator is owned by the per-request context. The context is created in the [`scheduling`](lld-scheduling.md) layer when a request enters and destroyed (i.e. the arena is reset) on completion. All per-request data structures (parser scratch buffers, filter state, response buffers) allocate from the arena.
+The allocator is owned by the per-request handler in `crates/riftgate/src/proxy.rs`: a fresh `BumpArena` is constructed at request entry and dropped (or `reset()`-and-returned-to-pool, future work) on completion. All per-request data structures (parser scratch buffers, request-body buffers, filter state) should allocate from the arena.
+
+The arena does not depend on any other Riftgate subsystem. It depends transitively on `bumpalo` for the bump implementation and on `std::alloc::System` for the fallback path.
 
 ### Patterns and conventions
 
-- **Arena scope = request scope.** Nothing outlives the request unless explicitly copied.
+- **Arena scope = request scope.** Nothing in the arena outlives the request unless explicitly copied to `SystemAllocator` first.
 - **Free is a no-op.** Individual deallocation is a programming error; the arena is reset wholesale.
-- **Pre-sized arenas.** Each arena starts at 4 KB and grows by doubling up to a configured cap (default 1 MB). Over-cap requests fall back to system allocation with a warning.
-- **Arena pool.** Completed-request arenas are returned to a per-worker pool, not freed back to the OS, so subsequent requests reuse the memory.
+- **Pre-sized arenas.** Each arena starts at 4 KB and grows by doubling up to a 1 MB cap (configurable). Over-cap requests fall back to system allocation; this is logged but does not fail the request.
+- **No arena pool yet.** v0.1 allocates a fresh `BumpArena` per request and drops it on completion. Pooling is on the v0.2 list once we have measured allocator pressure under sustained load.
+- **`SystemAllocator` for off-path data.** The router's backend table, the config tree, and the observability bus all live in `SystemAllocator` because their lifetime is the gateway, not the request.
 
 ### Pitfalls
 
-- **Lifetime confusion.** Borrows from arena memory must not escape the request scope. Compile-time enforced by Rust's borrow checker; defense in depth via lifetime annotations on the public API.
-- **Unbounded growth.** Without a cap, a single bad request can grow the arena forever. The cap is enforced.
-- **Alignment mistakes.** The bump allocator must respect each `Layout`'s alignment; tests cover misaligned allocations.
+- **Lifetime confusion.** Borrows from arena memory must not escape the request scope. Compile-time enforced by Rust's borrow checker plus the `&mut self` discipline on `reset`.
+- **Unbounded growth.** Without a cap, a single bad request can grow the arena forever. The 1 MB cap is enforced; over-cap allocations spill to `SystemAllocator` so a runaway request does not pin a multi-MB chunk in the pool.
+- **Alignment mistakes.** The bump allocator must respect each `Layout`'s alignment; covered by the bumpalo unit tests and by [`crates/riftgate-core/benches/allocator.rs`](../../crates/riftgate-core/benches/allocator.rs).
+- **`*mut u8` is unsafe.** Callers must construct slices with the correct length and not alias arena pointers. The Riftgate crates wrap arena-allocated buffers in safe types (`Vec`, `Bytes`) before exposing them.
 
 ### Standards and review gates
 
-- Allocator changes require microbenchmark on the `accept→arena_alloc→reset` path.
-- Memory usage after a million-request soak must be flat (within noise).
-- Fuzz tests on `BumpArena` for alignment and overflow.
+- Allocator changes must keep [`crates/riftgate-core/benches/allocator.rs`](../../crates/riftgate-core/benches/allocator.rs) green: a fresh `BumpArena` plus several allocations should fit in tens of nanoseconds; full request-arena teardown should remain free.
+- The trait surface is part of the v0.1 frozen surface — changes require a new ADR superseding the v0.0 ADR.
+- Memory usage after a 1M-request soak must be flat (within noise); the arena pool, when added, must not unbound RSS.
 
 ## Testing strategy
 
-- Alignment fuzz.
-- Long-running soak — RSS should be flat.
-- Concurrent stress — many workers allocating concurrently from per-worker arenas.
+- Unit tests in `riftgate-core/src/allocator.rs` cover alignment, capacity, and reset semantics.
+- The microbenchmark in [`crates/riftgate-core/benches/allocator.rs`](../../crates/riftgate-core/benches/allocator.rs) measures alloc / reset throughput.
+- The end-to-end test in [`crates/riftgate/tests/e2e.rs`](../../crates/riftgate/tests/e2e.rs) exercises the per-request path; v0.2 will add a soak test once arena pooling lands.
 
 ## Open questions
 
-- Should the arena pool be per-worker or shared? Recommend per-worker to avoid cross-core synchronization. Cost: slightly higher RSS.
+- Should the arena pool be per-shard or shared? Recommend per-shard to avoid cross-core synchronization. Cost: slightly higher RSS. Decide in v0.2 once measured.
 - Should we support per-request arena tracing (which call sites allocated how much)? Useful for debugging; opt-in.
 - jemalloc as an alternative to mimalloc for the global allocator? Both are fine; mimalloc is simpler to integrate. See [Options 005](../05-options/005-allocator.md).
