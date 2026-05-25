@@ -11,7 +11,11 @@
 db-path           = "~/.cargo/advisory-db"
 db-urls           = ["https://github.com/RustSec/advisory-db"]
 yanked            = "deny"
-ignore            = []
+ignore            = [
+    # Transitively pulled by tonic/opentelemetry today; no safe upgrade is
+    # available yet per RustSec advisory metadata.
+    "RUSTSEC-2025-0134",
+]
 
 [licenses]
 confidence-threshold = 0.93
@@ -23,6 +27,7 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
+    "CDLA-Permissive-2.0",
     "Unicode-DFS-2016",
     "Unicode-3.0",
     "Zlib",

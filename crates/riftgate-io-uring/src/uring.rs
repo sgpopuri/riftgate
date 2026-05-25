@@ -168,6 +168,9 @@ impl AsyncIO for UringIO {
                 writable,
             });
         }
+        // Release the completion queue borrow before we potentially mutably
+        // borrow `self` again via `submit_poll`.
+        drop(cq);
         // Resubmit poll entries for fds that fired — `PollAdd` without a
         // multishot flag is one-shot. Re-arming here matches the epoll
         // edge-triggered contract: the consumer drains, then we re-arm.
