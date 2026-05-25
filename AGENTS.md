@@ -172,6 +172,7 @@ There is exactly one live status surface in this repo: the **"Currently shipping
 ### Code (when Rust lands)
 
 - Rust, stable toolchain, MSRV pinned in `rust-toolchain.toml`.
+- **Distribution:** through v0.4, crates are **not** published to crates.io; consumers build from the GitHub repo (`cargo build -p riftgate`). Registry publish is a **v1.0** decision only — see [`docs/02-mvp-roadmap.md`](docs/02-mvp-roadmap.md) § Distribution (crates.io). Do not add `cargo publish` or `cargo install` as a milestone requirement before then.
 - `cargo clippy --deny warnings` and `cargo fmt --check` must pass.
 - Public items have rustdoc. No obvious / narrating comments.
 - Per-request arena allocator for hot-path memory.

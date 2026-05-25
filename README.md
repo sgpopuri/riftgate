@@ -59,7 +59,15 @@ Read in this order if you are new:
 | Config model | [`015-config-model`](docs/05-options/015-config-model.md) | [`0012`](docs/06-adrs/0012-toml-plus-env-fail-loudly.md) | `riftgate-config` |
 | Language choice | n/a (foundational) | [`0001`](docs/06-adrs/0001-rust-not-go-or-zig.md) | Rust, stable toolchain |
 
-`v0.1` close-out (retrospective, tagging, publishing) is the remaining work for this milestone; `v0.2` then takes on the custom `PerCoreScheduler`, the production timer wheel, the in-proc rate limiter, and the WAL. See the [MVP roadmap](docs/02-mvp-roadmap.md) for what ships when, the [Options index](docs/05-options/README.md), and the [ADR index](docs/06-adrs/README.md) for the full decision history.
+`v0.2` takes on the custom `PerCoreScheduler`, the production timer wheel, the in-proc rate limiter, and the WAL. See the [MVP roadmap](docs/02-mvp-roadmap.md) for what ships when, the [Options index](docs/05-options/README.md), and the [ADR index](docs/06-adrs/README.md) for the full decision history.
+
+**Distribution:** through v0.4, install is **build from source** only (no [crates.io](https://crates.io) publish). Whether we add `cargo install` is a **v1.0** decision — see [Distribution](docs/02-mvp-roadmap.md#distribution-cratesio) in the roadmap.
+
+```bash
+git clone https://github.com/sgpopuri/riftgate.git && cd riftgate
+cargo build --release -p riftgate
+./target/release/riftgate --config examples/01-basic-openai-proxy/riftgate.toml
+```
 
 To run the walking skeleton against a mock OpenAI backend, see [`examples/01-basic-openai-proxy`](examples/01-basic-openai-proxy/).
 

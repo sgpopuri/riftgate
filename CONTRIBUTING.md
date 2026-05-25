@@ -4,18 +4,20 @@ Riftgate is built in public as a teaching artifact. Contributions of every shape
 
 ## What kind of contribution should I make?
 
-Right now, in the `v0.0` public design phase, the most valuable contributions are:
+With the `v0.1` walking skeleton in the tree, valuable contributions include:
 
 - **Critique of an existing Options doc.** Did we miss a candidate? Misread a tradeoff? Open an issue or a pull request that proposes the change.
 - **A new Options doc proposal.** If we have an unaddressed design decision that should be in `docs/05-options/`, propose one. Use the `[_template.md](docs/05-options/_template.md)`. Number it consecutively and add it to the [index](docs/05-options/README.md).
 - **An ADR critique.** If a chosen direction in `docs/06-adrs/` no longer holds, open an ADR-supersession PR that links to a new ADR and explains the reasoning.
 - **A clarifying question that becomes a glossary entry.** If something in the docs is unclear, that's a documentation bug. Help us fix it.
 
-When code lands (`v0.1` and beyond):
+For code changes:
 
 - Bugs and small features through normal pull requests, gated by the relevant ADR.
 - New routing strategies, filters, observability sinks via the trait extension points.
 - Microbenchmarks against real workloads (we want honest numbers, not vendor numbers).
+
+**Getting a binary:** clone this repo and `cargo build --release -p riftgate`. We do not publish to crates.io until the v1.0 distribution decision ([roadmap § Distribution](docs/02-mvp-roadmap.md#distribution-cratesio)).
 
 ## The contribution workflow
 

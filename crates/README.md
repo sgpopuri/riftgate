@@ -19,6 +19,16 @@ The Rust workspace. The `v0.1` walking skeleton is in. Additional crates land as
 | `riftgate-mcp` | MCP capability broker impl | v0.5 |
 | `riftgate-operator` | Kubernetes operator + CRDs | v1.0 |
 
+## Distribution
+
+Workspace crates are **not** published to [crates.io](https://crates.io) through v0.4. Build and run from a git checkout:
+
+```bash
+cargo build --release -p riftgate
+```
+
+Whether we publish to the registry is decided at the **v1.0** retrospective ([`docs/02-mvp-roadmap.md`](../docs/02-mvp-roadmap.md) § Distribution).
+
 ## Workspace conventions
 
 - `Cargo.toml` at this directory's parent declares the workspace; MSRV is pinned in `rust-toolchain.toml`.

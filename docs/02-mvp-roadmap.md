@@ -4,6 +4,14 @@
 >
 > **Pacing philosophy:** milestones complete when they're done, not when a calendar says so. If the options docs, posts, and code flow quickly, milestones complete sooner. If life intervenes, they take longer. Rough estimate: ~12 months total at evenings-and-weekends pace with AI-assisted acceleration, but the milestone sequence is the commitment, not the timeline.
 
+## Distribution (crates.io)
+
+Through **`v0.4`**, Riftgate is distributed **only from the GitHub repository**: clone, `cargo build`, `cargo run`. We do **not** publish workspace crates to [crates.io](https://crates.io) and we do **not** treat `cargo install riftgate` as a milestone deliverable.
+
+At the **`v1.0` retrospective**, maintainers decide whether to publish to crates.io (crate-name reservation, semver API stability, release automation). Until that decision, documentation and CI must not imply that registry install is supported or required.
+
+Tag pushes may run release **build + test** workflows; they do not publish to crates.io.
+
 ## Currently shipping
 
 > _**Project context (read every session):**_
@@ -92,7 +100,7 @@ Options/ADRs 001-008 from `v0.0`, plus:
 - `013-observability-sink.md` and ADR (initial: OTel exporter)
 
 ### Goal metric
-Someone outside the project can `cargo install riftgate` (or build from source) and proxy real OpenAI-format traffic. ~100 GitHub stars. A second person opens a non-trivial issue.
+Someone outside the project can clone the repo, `cargo build --release -p riftgate`, and proxy real OpenAI-format traffic (see [`examples/01-basic-openai-proxy`](../examples/01-basic-openai-proxy/)). ~100 GitHub stars. A second person opens a non-trivial issue. Registry distribution is explicitly out of scope until the v1.0 crates.io decision ([Distribution](#distribution-cratesio)).
 
 ### Retrospective
 - [`02b-v0.1-retrospective.md`](02b-v0.1-retrospective.md) — what shipped, what went well, what we missed and fixed in close-out, what's open at `v0.1` close, process notes for `v0.2` and beyond.
@@ -245,6 +253,9 @@ FR-401 through FR-405; all cross-cutting requirements (FR-X01 through FR-X05) ar
 
 ### Goal metric
 - 3+ design partners willing to pilot Riftgate in production.
+
+### Distribution decision (v1.0)
+At the v1.0 retrospective, decide whether to publish workspace crates to crates.io (`cargo install riftgate` and dependency-order `cargo publish`). If yes, add an Options doc + ADR, reserve crate names, and wire release automation. If no, document build-from-source / container images as the supported distribution path going forward.
 
 ---
 
