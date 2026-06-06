@@ -8,10 +8,10 @@
 //! `emit-counter`, and per-filter defaults of 5M fuel / 16 MiB memory /
 //! 50 ms wallclock.
 //!
-//! Phase B Pass 1 (this commit) lands the **public type surface** so
+//! Pass 1 (this commit) lands the **public type surface** so
 //! callers compile against `WasmFilter` / `WasmFilterConfig` today. The
 //! wasmtime engine, the WIT bindings, and the host-function table land in
-//! a follow-on Phase B PR; this scaffold returns
+//! a follow-on implementation PR; this scaffold returns
 //! [`FilterAction::Continue`] from every entry point, behaving as the
 //! identity filter under any configuration. Tests and callers may
 //! substitute it freely; the substitution will be transparent when the
@@ -66,7 +66,7 @@ impl core::fmt::Display for WasmFilterError {
         match self {
             Self::LoadFailed(why) => write!(f, "wasm component load failed: {why}"),
             Self::BackendNotWired => f.write_str(
-                "wasm runtime backend not yet wired; use FilterChain over native filters until the v0.3 Phase B follow-on lands",
+                "wasm runtime backend not yet wired; use FilterChain over native filters until the production wasm backend follow-on lands",
             ),
         }
     }
@@ -98,7 +98,7 @@ impl WasmFilter {
 
     /// The production constructor. Errors with
     /// `WasmFilterError::BackendNotWired`
-    /// until the wasmtime backend lands in the follow-on Phase B PR.
+    /// until the wasmtime backend lands in the follow-on implementation PR.
     ///
     /// # Errors
     /// See `WasmFilterError`.

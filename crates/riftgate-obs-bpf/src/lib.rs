@@ -16,12 +16,12 @@
 //!
 //! - On `cfg(all(target_os = "linux", feature = "bpf"))`, the
 //!   [`BACKEND_ENABLED`] descriptor is `true` and the Aya programs (when
-//!   they land in the follow-on Phase D PR) are loadable.
+//!   they land in the follow-on implementation PR) are loadable.
 //! - Everywhere else, the crate compiles to an empty library so the
 //!   workspace builds without an Aya / clang / LLVM toolchain in scope.
 //!
 //! The production Aya programs and their generated skeletons are deferred
-//! to a follow-on Phase D PR; this scaffold lands the crate manifest and
+//! to a follow-on implementation PR; this scaffold lands the crate manifest and
 //! the public descriptor so the workspace graph is complete today.
 
 #![doc(html_root_url = "https://docs.rs/riftgate-obs-bpf/0.1.0-dev")]

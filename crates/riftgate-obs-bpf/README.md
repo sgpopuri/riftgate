@@ -6,7 +6,7 @@ v0.4 in-tree eBPF programs for Riftgate's observability plane. Compiled to
 Per [ADR 0024](../../docs/06-adrs/0024-ebpf-via-aya.md) and
 [Options 014](../../docs/05-options/014-ebpf-integration.md).
 
-## Phase D Pass 1 status
+## Implementation status (pass 1: scaffold)
 
 - Crate manifest, lib.rs scaffold, and `BpfProgram` slot enumeration land
   today. `BACKEND_ENABLED` is `true` only on Linux with the `bpf` feature
@@ -15,7 +15,8 @@ Per [ADR 0024](../../docs/06-adrs/0024-ebpf-via-aya.md) and
   as `riftgate-io-uring`).
 - Production Aya programs (CPU on/off-time sampling at 19 Hz, syscall
   stalls, TCP retransmits per upstream) and their generated skeletons land
-  in a follow-on Phase D PR. Building them requires a Linux host with
+  in a follow-on implementation PR within the combined `v0.3 + v0.4`
+  implementation phase. Building them requires a Linux host with
   Aya's prerequisites; CI gates that path separately from the macOS /
   cross-platform default build.
 

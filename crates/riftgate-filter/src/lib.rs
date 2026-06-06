@@ -13,7 +13,7 @@
 //!   impl that binds the frozen `riftgate:filter/v1` Component Model ABI.
 //!   The wasmtime runtime, the WIT bindings, AOT precompile, instance
 //!   pooling, fuel / memory / wallclock limits, and the host-function table
-//!   land in a follow-on Phase B PR. The scaffold here lets every consumer
+//!   land in a follow-on implementation PR. The scaffold here lets every consumer
 //!   compile against the public type surface today.
 //!
 //! ## Filter ordering

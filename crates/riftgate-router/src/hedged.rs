@@ -17,7 +17,7 @@
 //!
 //! The actual fan-out (dispatching both backends, racing them, cancelling
 //! the loser) lives in the request driver (`crates/riftgate/src/proxy.rs`,
-//! deferred to a follow-on Phase B PR). The router is the policy seam.
+//! deferred to a follow-on implementation PR). The router is the policy seam.
 //!
 //! ## Decision flow
 //!

@@ -6,7 +6,7 @@ WebAssembly Component Model ABI.
 Per [ADR 0019](../../docs/06-adrs/0019-wasm-extension-mechanism.md) and
 [Options 016](../../docs/05-options/016-extension-mechanism.md).
 
-## Phase B Pass 1 status
+## Implementation status (pass 1: scaffold)
 
 - `FilterChain` — production. In-order on the request side, reverse-order
   on the response side. Implements `riftgate_core::Filter`, so a chain
@@ -19,5 +19,6 @@ Per [ADR 0019](../../docs/06-adrs/0019-wasm-extension-mechanism.md) and
 
 The production wasmtime backend (AOT precompile, instance pooling, host
 functions `log` / `now-millis` / `emit-counter`, fuel / memory / wallclock
-limits) lands in a follow-on Phase B PR. The substitution is transparent
-to callers — the public type surface does not change.
+limits) lands in a follow-on implementation PR within the combined `v0.3 +
+v0.4` implementation phase. The substitution is transparent to callers —
+the public type surface does not change.
