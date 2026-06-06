@@ -51,7 +51,7 @@ The arena does not depend on any other Riftgate subsystem. It depends transitive
 - **Arena scope = request scope.** Nothing in the arena outlives the request unless explicitly copied to `SystemAllocator` first.
 - **Free is a no-op.** Individual deallocation is a programming error; the arena is reset wholesale.
 - **Pre-sized arenas.** Each arena starts at 4 KB and grows by doubling up to a 1 MB cap (configurable). Over-cap requests fall back to system allocation; this is logged but does not fail the request.
-- **No arena pool yet.** v0.1 allocates a fresh `BumpArena` per request and drops it on completion. Pooling is on the v0.2 list once we have measured allocator pressure under sustained load.
+- **Per-shard arena pool (decided).** Completed-request arenas are `reset()` and returned to a **per-shard** free-list, not a shared/global pool, per [ADR 0027](../06-adrs/0027-per-shard-bump-arena-pool.md). The pool is bounded: a shard retains up to `arena_pool_max` reset arenas (default 32), and an arena whose high-water capacity exceeded `arena_pool_retain_cap_bytes` (default 64 KiB) is freed rather than pooled so a single large request does not pin a multi-MiB chunk. The recycle path takes no lock and no atomic — the arena is `!Send` and never leaves its shard ([ADR 0004](../06-adrs/0004-per-shard-default-stealing-opt-in.md)).
 - **`SystemAllocator` for off-path data.** The router's backend table, the config tree, and the observability bus all live in `SystemAllocator` because their lifetime is the gateway, not the request.
 
 ### Pitfalls
@@ -75,6 +75,6 @@ The arena does not depend on any other Riftgate subsystem. It depends transitive
 
 ## Open questions
 
-- Should the arena pool be per-shard or shared? Recommend per-shard to avoid cross-core synchronization. Cost: slightly higher RSS. Decide in v0.2 once measured.
+- Should the arena pool be per-shard or shared? **Resolved: per-shard**, per [ADR 0027](../06-adrs/0027-per-shard-bump-arena-pool.md) — no cross-core synchronization on the recycle path, bounded by `arena_pool_max` and `arena_pool_retain_cap_bytes`; the accepted cost is slightly higher idle RSS.
 - Should we support per-request arena tracing (which call sites allocated how much)? Useful for debugging; opt-in.
 - jemalloc as an alternative to mimalloc for the global allocator? Both are fine; mimalloc is simpler to integrate. See [Options 005](../05-options/005-allocator.md).

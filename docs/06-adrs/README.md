@@ -30,7 +30,7 @@ Each ADR captures a decision: context, decision, consequences. Format is Michael
 | 0007 | [Hand-rolled table-driven FSM in riftgate-parser; httparse for headers in v0.1; full FSM in v0.2](0007-handrolled-fsm-parser.md) | accepted | 2026-05-03 | [007-protocol-parser](../05-options/007-protocol-parser.md) |
 | 0008 | [SSE as the only v0.1 streaming framing; NDJSON optional in v0.2+; gRPC bidi deferred to v1.0+](0008-sse-default-grpc-future.md) | accepted | 2026-05-03 | [008-stream-framing](../05-options/008-stream-framing.md) |
 | 0009 | [Rate limiter trait + in-proc token-bucket only in v0.2; distributed impls deferred](0009-rate-limiter-trait-in-proc-only.md) | accepted | 2026-05-25 | [021-rate-limiting](../05-options/021-rate-limiting.md), [023-token-bucket-parameters](../05-options/023-token-bucket-parameters.md) |
-| 0010 | [Binary-heap timer subsystem in v0.1; hierarchical wheel in v0.2 behind the same trait](0010-binary-heap-timers-v01-hierarchical-wheel-v02.md) | accepted | 2026-05-10 | [006-timer-subsystem](../05-options/006-timer-subsystem.md) |
+| 0010 | [Binary-heap timer subsystem in v0.1; hierarchical wheel in v0.2 behind the same trait](0010-binary-heap-timers-v01-hierarchical-wheel-v02.md) | accepted (cutover-schedule clause superseded by [0028](0028-timer-cutover-benchmark-gated.md)) | 2026-05-10 | [006-timer-subsystem](../05-options/006-timer-subsystem.md) |
 | 0011 | [ObservabilitySink trait + bounded-MPSC bus + OtelSink + MultiSink in v0.1](0011-otel-default-sink-multisink-fanout.md) | accepted | 2026-05-10 | [013-observability-sink](../05-options/013-observability-sink.md) |
 | 0012 | [Static TOML configuration with env-var overrides; safe-subset hot reload deferred to v0.2 / v0.3; CRDs in v1.0](0012-static-toml-env-override-v01.md) | accepted | 2026-05-10 | [015-config-model](../05-options/015-config-model.md) |
 | 0013 | [Per-shard append-only file WAL with group-commit fdatasync; RocksDB and SQLite rejected](0013-append-only-file-wal.md) | accepted | 2026-05-25 | [009-request-log](../05-options/009-request-log.md) |
@@ -47,6 +47,8 @@ Each ADR captures a decision: context, decision, consequences. Format is Michael
 | 0024 | [eBPF integration via Aya (pure-Rust BPF), Linux 5.15+, feature-gated and opt-in](0024-ebpf-via-aya.md) | accepted | 2026-05-25 | [014-ebpf-integration](../05-options/014-ebpf-integration.md) |
 | 0025 | [Token-level metrics via reservoir-sampled OTel spans + HDR-histogram aggregates + per-token WAL records](0025-token-level-metrics-probabilistic.md) | accepted | 2026-05-25 | [027-token-level-metrics](../05-options/027-token-level-metrics.md) |
 | 0026 | [GPU pressure correlation via DCGM exporter scrape (primary) and NVML in-process FFI (escape hatch)](0026-gpu-pressure-via-dcgm-exporter.md) | accepted | 2026-05-25 | [028-gpu-pressure-correlation](../05-options/028-gpu-pressure-correlation.md) |
+| 0027 | [Per-request bump-arena recycling uses a per-shard pool, not a shared pool](0027-per-shard-bump-arena-pool.md) | accepted | 2026-06-06 | [005-allocator](../05-options/005-allocator.md) |
+| 0028 | [HierarchicalWheel is benchmark-gated, not milestone-scheduled; BinaryHeapTimers stays the default](0028-timer-cutover-benchmark-gated.md) | accepted | 2026-06-06 | [006-timer-subsystem](../05-options/006-timer-subsystem.md) |
 
 ADR `0015` is listed above as `proposed` because its Options doc is already authored and its decision is already framed; it will move to `accepted` at the open of `v0.5`.
 

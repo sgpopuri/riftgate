@@ -2,7 +2,7 @@
 
 > Hierarchical timing wheel for per-request deadlines. O(1) insert, O(1) cancel, O(1) tick processing for the common case.
 >
-> Status: **shipped (v0.1)**. The v0.1 default is `BinaryHeapTimers` per [ADR 0010](../06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md); `HierarchicalWheel` lands in v0.2 behind the same trait.
+> Status: **shipped (v0.1)**. The default is `BinaryHeapTimers` per [ADR 0010](../06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md) and stays the default indefinitely; `HierarchicalWheel` is **benchmark-gated, not milestone-scheduled**, and is not built until the gate in [ADR 0028](../06-adrs/0028-timer-cutover-benchmark-gated.md) trips.
 
 ## Purpose
 
@@ -40,7 +40,7 @@ Two design adjustments from the v0.0 outline:
 |------|--------|--------------|-------|
 | `BinaryHeapTimers` | shipped (v0.1) | `riftgate-core` | `BinaryHeap<Reverse<(Instant, u64)>>` + `HashMap<u64, callback>` + lazy `HashSet<u64>` of cancelled ids. O(log n) schedule / O(1) average cancel / O(k log n) tick. Compaction rebuilds the heap when the cancelled set exceeds 25% of the heap. |
 | `DeterministicTimers` | shipped (v0.1) | `riftgate-core` | Wraps `BinaryHeapTimers` with an externally-driven `Instant`; used by tests that need to control time without sleeping. |
-| `HierarchicalWheel` | v0.2 | `riftgate-core` | O(1) insert/cancel; O(slot-list) per tick. Replaces `BinaryHeapTimers` as the default once tick scaling becomes the bottleneck. |
+| `HierarchicalWheel` | not built (benchmark-gated) | `riftgate-core` | O(1) insert/cancel; O(slot-list) per tick. Built and promoted to default only when [`benches/timers.rs`](../../crates/riftgate-core/benches/timers.rs) shows the heap's per-tick p99 exceeding the 100 µs budget at ≥100k live timers, per [ADR 0028](../06-adrs/0028-timer-cutover-benchmark-gated.md). |
 
 Decision rationale: [Options 006 (timer subsystem)](../05-options/006-timer-subsystem.md).
 

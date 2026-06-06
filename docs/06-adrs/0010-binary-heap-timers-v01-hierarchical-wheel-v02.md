@@ -1,7 +1,7 @@
 # ADR 0010. Binary-heap timer subsystem in v0.1; hierarchical wheel in v0.2 behind the same trait
 
 > **Date:** 2026-05-10
-> **Status:** accepted
+> **Status:** accepted — the cutover-schedule clause (`HierarchicalWheel` lands in v0.2, becomes default in v0.3) is **superseded by [ADR 0028](0028-timer-cutover-benchmark-gated.md)**, which makes the cutover benchmark-gated; all other clauses stand.
 > **Options doc:** [006-timer-subsystem](../05-options/006-timer-subsystem.md)
 > **Deciders:** Sriram Popuri
 

@@ -3,7 +3,7 @@
 > **Status:** `recommended` — per-request `BumpArena` on the hot path with the system `malloc` as the global allocator default in `v0.1`; `mimalloc` becomes the opt-in global allocator in `v0.2`. See [ADR 0006](../06-adrs/0006-bump-arena-plus-system-malloc.md).
 > **Foundational topics:** memory allocators (`ptmalloc2`, `jemalloc`, `mimalloc`, `tcmalloc`), bump-pointer arena allocation, per-request lifetime memory contexts
 > **Related options:** [001](001-io-model.md) (IO model), [002](002-async-runtime.md) (async runtime), [003](003-concurrency-model.md) (concurrency model)
-> **Related ADR:** [ADR 0006](../06-adrs/0006-bump-arena-plus-system-malloc.md)
+> **Related ADR:** [ADR 0006](../06-adrs/0006-bump-arena-plus-system-malloc.md), [ADR 0027](../06-adrs/0027-per-shard-bump-arena-pool.md) (per-shard arena pool)
 
 ## 1. The decision in one sentence
 

@@ -1,9 +1,9 @@
 # 006. Timer subsystem
 
-> **Status:** `recommended` — `BinaryHeapTimers` (a `std::collections::BinaryHeap`-backed min-heap with lazy cancellation) in `v0.1`; `HierarchicalWheel` (Varghese & Lauck, SOSP 1987) in `v0.2` behind the same `TimerSubsystem` trait. See [ADR `0010`](../06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md).
+> **Status:** `recommended` — `BinaryHeapTimers` (a `std::collections::BinaryHeap`-backed min-heap with lazy cancellation) is the default and stays the default indefinitely. `HierarchicalWheel` (Varghese & Lauck, SOSP 1987) is a peer impl behind the same `TimerSubsystem` trait that is **benchmark-gated, not milestone-scheduled** — built only when the gate in [ADR `0028`](../06-adrs/0028-timer-cutover-benchmark-gated.md) trips. See [ADR `0010`](../06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md) and [ADR `0028`](../06-adrs/0028-timer-cutover-benchmark-gated.md).
 > **Foundational topics:** hashed and hierarchical timing wheels, binary and `d`-ary heaps, OS timer interfaces (`timerfd_create(2)`, `kevent` `EVFILT_TIMER`), monotonic clocks (`clock_gettime(CLOCK_MONOTONIC)`), low-level synchronization primitives (`futex`, mutex, condvar)
 > **Related options:** [`001`](001-io-model.md) (IO model — `tick` is driven from the same per-shard event loop as `poll`), [`003`](003-concurrency-model.md) (concurrency model — timers are per-shard), [`004`](004-request-queue.md) (request queue — cross-shard timer dispatch borrows the same MPMC)
-> **Related ADR:** [ADR `0010`](../06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md)
+> **Related ADR:** [ADR `0010`](../06-adrs/0010-binary-heap-timers-v01-hierarchical-wheel-v02.md), [ADR `0028`](../06-adrs/0028-timer-cutover-benchmark-gated.md) (cutover gate)
 
 ## 1. The decision in one sentence
 
@@ -201,13 +201,13 @@ The reasoning, restated:
 
 ### Conditions under which we'd revisit
 
-- Benchmarks at the open of `v0.2` (`benchmarks/timers/heap_at_100k_1m.rs`) show the heap exceeding the LLD's "tick processing time at peak should be <100 µs" budget under realistic Riftgate load. We promote `HierarchicalWheel` to default.
+- The timer benchmark ([`crates/riftgate-core/benches/timers.rs`](../../crates/riftgate-core/benches/timers.rs)) shows the heap exceeding the LLD's "tick processing time at peak should be <100 µs" budget at ≥100k live timers under realistic Riftgate load. That benchmark result is the trigger to build and promote `HierarchicalWheel`, per [ADR `0028`](../06-adrs/0028-timer-cutover-benchmark-gated.md).
 - The cancelled-set growth metric (`riftgate_timers_cancelled_pending`) shows pathological accumulation in production deployments. We add a tighter compaction trigger or move to wheel-based cancel.
 - A use case appears that genuinely needs sub-millisecond precision (none on the roadmap; mentioned for completeness). We add a third impl that wraps `timerfd` for that specific deployment.
 
 ### What stays available behind feature flags
 
-- `HierarchicalWheel` lands in `v0.2` as a peer impl of `TimerSubsystem`. It is *opt-in* in `v0.2` (selected via the config model — see Options [`015`](015-config-model.md)) and becomes default in `v0.3` only if the `v0.2` benchmark gate justifies the switch.
+- `HierarchicalWheel` is a planned peer impl of `TimerSubsystem`, **benchmark-gated rather than milestone-scheduled** per [ADR `0028`](../06-adrs/0028-timer-cutover-benchmark-gated.md): it is built (opt-in via the config model — see Options [`015`](015-config-model.md)) and then promoted to default only when the benchmark gate above trips. `BinaryHeapTimers` is the default until then.
 - A `#[cfg(test)] DeterministicTimers` impl ships alongside the heap in `riftgate-core` for unit-testing deadline-sensitive code without sleeping. This is the FR-X02 second impl that satisfies the "every trait has at least two implementations" discipline.
 
 ## 7. What we explicitly reject
