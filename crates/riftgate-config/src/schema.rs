@@ -10,7 +10,7 @@
 
 use crate::secret::Secret;
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 
 /// Top-level configuration root.
 ///
@@ -60,7 +60,7 @@ impl Default for ServerConfig {
 }
 
 fn default_listen_addr() -> SocketAddr {
-    "localhost:8080".parse().expect("valid default socket addr")
+    SocketAddr::from((Ipv4Addr::LOCALHOST, 8080))
 }
 
 /// Default upstream backend.

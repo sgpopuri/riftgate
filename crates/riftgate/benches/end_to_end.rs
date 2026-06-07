@@ -62,7 +62,7 @@ async fn spawn_upstream() -> SocketAddr {
 
 async fn spawn_gateway(upstream: SocketAddr) -> SocketAddr {
     let mut config = riftgate_config::Config::default();
-    config.server.listen_addr = "localhost:0".parse().unwrap();
+    config.server.listen_addr = SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0));
     config.backend.url = format!("http://{upstream}");
     config.backend.timeout_ms = 5_000;
     config.obs.bus_capacity = 4096;

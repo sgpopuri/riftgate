@@ -131,7 +131,7 @@ fn apply_env_overrides(config: &mut Config, env: &Env, errors: &mut Vec<ConfigEr
                 Ok(addr) => config.server.listen_addr = addr,
                 Err(e) => errors.push(ConfigError::EnvParse {
                     key: k.clone(),
-                    expected: "socket address (e.g. localhost:8080)",
+                    expected: "socket address (e.g. [::1]:8080)",
                     got: format!("{v} ({e})"),
                 }),
             },

@@ -156,7 +156,7 @@ async fn spawn_riftgate(
     shutdown::DrainSender,
 ) {
     let mut config = riftgate_config::Config::default();
-    config.server.listen_addr = "localhost:0".parse().unwrap();
+    config.server.listen_addr = SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0));
     config.backend.url = format!("http://{upstream_addr}");
     config.backend.timeout_ms = backend_timeout_ms;
     config.obs.bus_capacity = 256;

@@ -23,7 +23,7 @@ fn write_file(s: &str) -> NamedTempFile {
 fn valid_baseline_toml() -> &'static str {
     r#"
 [server]
-listen_addr = "localhost:9090"
+listen_addr = "[::1]:9090"
 
 [backend]
 url = "https://api.openai.com"

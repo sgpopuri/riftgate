@@ -15,7 +15,7 @@ every contributor's first session.
 
 | FR | Where to look |
 |----|---------------|
-| FR-001 | `riftgate.toml` ↦ `[server] listen_addr = "localhost:8080"` |
+| FR-001 | `riftgate.toml` ↦ `[server] listen_addr = "[::1]:8080"` |
 | FR-002 | Try a malformed JSON body — the gateway responds `400 Bad Request` |
 | FR-003 | `riftgate.toml` ↦ `[backend] url = "https://api.openai.com"` |
 | FR-004 | Pass `"stream": true` and watch SSE chunks land in `curl -N` |

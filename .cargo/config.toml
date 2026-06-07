@@ -1,14 +1,2 @@
 [registries.crates-io]
-index = "sparse+https://proxy.example.internal/cargo-crates-io/index/"
-
-[source.crates-io]
-replace-with = "artifactory"
-
-[registry]
-default = "artifactory"
-
-[registries.artifactory]
-index = "sparse+https://proxy.example.internal/cargo-crates-io/index/"
-
-[source.artifactory]
-registry = "sparse+https://proxy.example.internal/cargo-crates-io/index/"
+index = "sparse+https://index.crates.io/"
