@@ -13,7 +13,10 @@ use riftgate::error::RiftgateError;
 use riftgate::{bootstrap, proxy, server, shutdown, upstream};
 use riftgate_config::{Env, load};
 use riftgate_core::router::{BackendId, BackendPool, BackendSignals};
-use riftgate_router::RoundRobinRouter;
+use riftgate_router::{
+    CircuitBreakerArbiter, CircuitBreakerConfig, HedgedConfig, HedgedRouter, KvAwareConfig,
+    KvAwareRouter, WeightedRandomRouter,
+};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -78,7 +81,11 @@ fn main() -> ExitCode {
 /// Build a multi-thread Tokio runtime per [ADR 0003](../../docs/06-adrs/0003-tokio-multithread-default.md).
 fn build_runtime() -> std::io::Result<tokio::runtime::Runtime> {
     let mut builder = tokio::runtime::Builder::new_multi_thread();
-    builder.enable_all().thread_name("riftgate-worker");
+    builder.enable_all();
+    #[cfg(feature = "per-core-scheduler")]
+    builder.thread_name("riftgate-per-core");
+    #[cfg(not(feature = "per-core-scheduler"))]
+    builder.thread_name("riftgate-worker");
     builder.build()
 }
 
@@ -87,6 +94,10 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
     let config = load(cli.config.as_deref(), &env).map_err(RiftgateError::from)?;
 
     bootstrap::init_tracing(&config);
+    #[cfg(feature = "per-core-scheduler")]
+    tracing::info!("scheduler mode: per-core-scheduler feature enabled");
+    #[cfg(not(feature = "per-core-scheduler"))]
+    tracing::info!("scheduler mode: tokio default");
     tracing::info!(
         listen = %config.server.listen_addr,
         backend = %config.backend.url,
@@ -104,7 +115,11 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
     let upstream_client = upstream::build_client();
     let pool = Arc::new(BackendPool::from_ids(vec![BackendId(0)]));
     let signals = Arc::new(BackendSignals::new());
-    let router: Arc<dyn riftgate_core::router::Router> = Arc::new(RoundRobinRouter::new());
+    let weighted = WeightedRandomRouter::new(&[(BackendId(0), 1)]);
+    let kv_aware = KvAwareRouter::new(weighted, KvAwareConfig::default());
+    let hedged = HedgedRouter::new(kv_aware, HedgedConfig::default());
+    let routed = CircuitBreakerArbiter::new(hedged, CircuitBreakerConfig::default());
+    let router: Arc<dyn riftgate_core::router::Router> = Arc::new(routed);
 
     let listener = server::bind(config.server.listen_addr).await.map_err(|e| {
         RiftgateError::Io(std::io::Error::new(

@@ -44,7 +44,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use pin_project::{pin_project, pinned_drop};
 use riftgate_config::Config;
-use riftgate_core::router::{BackendPool, BackendSignals, Router, RoutingDecision};
+use riftgate_core::router::{BackendPool, BackendSignals, Outcome, Router, RoutingDecision};
 use riftgate_core::types::RequestId;
 use riftgate_obs::Publisher;
 use riftgate_obs::spans;
@@ -149,14 +149,13 @@ pub async fn handle(
     // Routing. The v0.1 binary builds a minimal `riftgate-core` Request
     // for the router; the router only inspects the method and path
     // today, but the trait surface is forward-compatible.
-    let decision = state.router.route(
-        &build_core_request(request_id, &method, &path),
-        state.pool.as_ref(),
-        state.signals.as_ref(),
-    );
+    let core_req = build_core_request(request_id, &method, &path, body_bytes.as_ref());
+    let decision = state
+        .router
+        .route(&core_req, state.pool.as_ref(), state.signals.as_ref());
 
-    let backend_id = match decision {
-        RoutingDecision::Send(id) => id,
+    let backend_id = match &decision {
+        RoutingDecision::Send(id) => *id,
         RoutingDecision::Reject(s) => {
             publish_span(
                 &state.publisher,
@@ -258,11 +257,18 @@ pub async fn handle(
             }
         };
 
-    let _ = dispatch_started; // bound for clarity / future per-span emission.
+    let (resp_parts, resp_body) = upstream_resp.into_parts();
+    let upstream_status = resp_parts.status;
+    let outcome = Outcome {
+        backend: backend_id,
+        status: Some(riftgate_core::request::StatusCode(upstream_status.as_u16())),
+        duration: dispatch_started.elapsed(),
+        ok: upstream_status.is_success(),
+    };
+    state.router.on_response(&decision, &outcome);
 
     // Build the response back to the client. We forward status and
     // (most) headers verbatim.
-    let (resp_parts, resp_body) = upstream_resp.into_parts();
     let mut builder = Response::builder().status(resp_parts.status);
     for (name, value) in resp_parts.headers.iter() {
         if is_hop_by_hop(name) {
@@ -302,6 +308,7 @@ fn build_core_request(
     id: RequestId,
     method: &Method,
     path: &str,
+    body_bytes: &[u8],
 ) -> riftgate_core::request::Request {
     use riftgate_core::request::{Body as CoreBody, Headers, Method as CoreMethod};
     let m = match *method {
@@ -318,7 +325,11 @@ fn build_core_request(
         method: m,
         path: path.to_owned(),
         headers: Headers::new(),
-        body: CoreBody::Empty,
+        body: if body_bytes.is_empty() {
+            CoreBody::Empty
+        } else {
+            CoreBody::Bytes(body_bytes.to_vec())
+        },
     }
 }
 

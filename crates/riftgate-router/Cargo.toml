@@ -19,5 +19,12 @@ riftgate-core = { path = "../riftgate-core" }
 # Per ADR 0022.
 xxhash-rust  = { workspace = true }
 
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name    = "routing"
+harness = false
+
 [lints]
 workspace = true

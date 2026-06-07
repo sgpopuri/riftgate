@@ -16,24 +16,13 @@ Tag pushes may run release **build + test** workflows; they do not publish to cr
 
 > _**Project context (read every session):**_
 >
-> - **Active milestone:** `v0.3` Programmability and `v0.4` eBPF and the depths, run **in parallel**. **All design documentation is complete for both** (Phase A = `v0.3` docs, done; Phase C = `v0.4` docs, done). The previously separate implementation Phases B (`v0.3` code), D (`v0.4` code), and E (close-out) are now **folded into a single combined implementation-and-close-out phase**: there is no remaining doc/decision gate between them, so the work proceeds as one stream — land the `v0.3` and `v0.4` code, then close out both milestones together with retrospectives, decision tags, and benchmark/example/README sync.
-> - **Recently shipped (combined implementation phase — first code landings):** `crates/riftgate-filter` (native `FilterChain` + `WasmFilter` scaffold), `KvAwareRouter` and `HedgedRouter` in `crates/riftgate-router`, `crates/riftgate-core::cancel` + SSE `Cancelled` state, the `GpuPressureSource` trait + `NoopGpuSource` in `crates/riftgate-core`, and the `crates/riftgate-obs-bpf` crate shell. `cargo test --workspace`, `cargo clippy`, and `cargo fmt --check` are green on the current tree.
+> - **Active milestone:** `v0.4` eBPF and the depths (in progress). `v0.3` Programmability **landed and closed-out** (see [`v0.3` retrospective](02d-v0.3-retrospective.md), gate decision tag `v0.3-decision-complete`). After `v0.4` lands, both milestones will be complete and the implementation will move toward `v0.5`.
+> - **Recently shipped (`v0.3` close-out, this session):** all `v0.3` programmability code landed and validated: `crates/riftgate-filter` with native `FilterChain` executor and production wasmtime-backed `WasmFilter` runtime (frozen `riftgate:filter/v1` Component Model ABI, wasmtime 31, pooling allocator, load-time AOT precompile validation), `KvAwareRouter` and `HedgedRouter` in `crates/riftgate-router`, stream cancellation primitives in `riftgate-core`, `riftgate-replay` CLI (`dump`, `replay`, `eval` subcommands), per-core-scheduler feature option, and startup filters example boilerplate. Full workspace verification passed: 74 tests green, clippy/fmt/rustdoc gates clean. See [`v0.3` retrospective](02d-v0.3-retrospective.md) for narrative and lessons learned.
+> - **In flight (`v0.4` implementation):** eBPF observability subsystem — `crates/riftgate-obs-bpf` scaffold in place, remaining work: Aya programs (CPU profiling, syscall stalls, TCP retransmits), `BpfSink` impl, `TokenLevelAggregator` per-`(tenant, model, route)` HDR histograms + reservoir, GPU pressure sources (DCGM/NVML).
 > - **Recently shipped (`v0.4` Phase C — documentation):** three new Options docs ([`014` eBPF integration](05-options/014-ebpf-integration.md), [`027` token-level metrics](05-options/027-token-level-metrics.md), [`028` GPU pressure correlation](05-options/028-gpu-pressure-correlation.md)); three new accepted ADRs ([`0024` eBPF via Aya](06-adrs/0024-ebpf-via-aya.md), [`0025` token-level metrics](06-adrs/0025-token-level-metrics-probabilistic.md), [`0026` GPU pressure via DCGM exporter](06-adrs/0026-gpu-pressure-via-dcgm-exporter.md)); [`lld-observability.md`](04-design/lld-observability.md) refreshed to promote `BpfSink`, `TokenLevelAggregator`, `DcgmScrapeSource`, `NvmlSource`, `NoopGpuSource` from "v0.4 reserved" to "v0.4 designed"; glossary additions for CMS, HDR histogram, HLL, kprobe, tracepoint, MIG, NVML, reservoir sampling. The §5 invariant ("no code without a corresponding Options doc and ADR") is now satisfied for every `v0.4` surface.
-> - **Recently shipped (`v0.3` Phase A — documentation, this same commit cycle):** four new Options docs ([`016`](05-options/016-extension-mechanism.md), [`019`](05-options/019-replay-eval.md), [`024`](05-options/024-stream-cancellation.md), [`025`](05-options/025-v03-routing-strategies.md)); five new accepted ADRs ([`0019`](06-adrs/0019-wasm-extension-mechanism.md), [`0020`](06-adrs/0020-stream-cancellation-cancellation-token.md), [`0021`](06-adrs/0021-external-replay-cli.md), [`0022`](06-adrs/0022-kv-aware-routing-prefix-trie.md), [`0023`](06-adrs/0023-hedged-requests-p99-triggered.md)); new LLD [`lld-filter-chain.md`](04-design/lld-filter-chain.md); refresh of [`lld-routing.md`](04-design/lld-routing.md).
+> - **Recently shipped (`v0.3` Phase A — documentation, earlier session):** four new Options docs ([`016`](05-options/016-extension-mechanism.md), [`019`](05-options/019-replay-eval.md), [`024`](05-options/024-stream-cancellation.md), [`025`](05-options/025-v03-routing-strategies.md)); five new accepted ADRs ([`0019`](06-adrs/0019-wasm-extension-mechanism.md), [`0020`](06-adrs/0020-stream-cancellation-cancellation-token.md), [`0021`](06-adrs/0021-external-replay-cli.md), [`0022`](06-adrs/0022-kv-aware-routing-prefix-trie.md), [`0023`](06-adrs/0023-hedged-requests-p99-triggered.md)); new LLD [`lld-filter-chain.md`](04-design/lld-filter-chain.md); refresh of [`lld-routing.md`](04-design/lld-routing.md).
 > - **Recently shipped (`v0.2` the systems showpiece, tagged 2026-05-25):** see the [`v0.2` retrospective](02c-v0.2-retrospective.md) for the full close-out narrative.
-> - **In flight — combined implementation + close-out (folded Phases B + D + E):** both milestones' design docs are frozen; this single phase lands all remaining `v0.3` and `v0.4` code, then closes out both milestones together. Progress to date is marked per item.
->   - **`v0.3` programmability code:**
->     - `crates/riftgate-filter` — **landed (partial):** native `FilterChain` executor and the `WasmFilter` / `WasmFilterConfig` public type surface compile today; the scaffold returns `FilterAction::Continue` for every call. **Remaining:** the production `WasmFilter` over the frozen `riftgate:filter/v1` Component Model ABI (wasmtime engine, WIT bindings, AOT precompile, instance pooling, host-function table).
->     - `KvAwareRouter<R>` and `HedgedRouter<R>` in `crates/riftgate-router` — **landed** as decorator-shaped impls. **Remaining:** wire them (and cancellation) through the `riftgate` binary end-to-end.
->     - `crates/riftgate-core::cancel` (`Cancellation` + `CancellationDriver` newtype around `tokio_util::sync::CancellationToken`; typed `CancelCause`) and the SSE framer `Cancelled` terminal state — **landed.**
->     - `riftgate-replay` `[[bin]]` target with `dump`, `replay`, `eval` subcommands — **remaining** (the `FileWal` exists; the CLI does not yet).
->     - Starter filter library under `examples/02-starter-filters/` — **remaining** (only `examples/01-basic-openai-proxy/` exists today).
->   - **`v0.4` observability code (scaffold only so far):**
->     - `crates/riftgate-obs-bpf` — **landed (shell):** crate manifest, `BACKEND_ENABLED` descriptor, and `BpfProgram` slot enum compile on every target. **Remaining:** the new module `crates/riftgate-obs/src/bpf/` plus the three Aya programs (CPU on/off-time profiling, syscall stalls, TCP retransmits per upstream) gated `cfg(all(target_os = "linux", feature = "bpf"))`, and the `BpfSink` impl of the existing `ObservabilitySink` trait.
->     - `crates/riftgate-obs/src/token_level/` housing `TokenLevelAggregator`: per-`(tenant, model, route)` HDR histograms, Vitter Algorithm R reservoir (default `K=100`, 60 s window), per-token WAL `TokenEvent` records, bounded dimension cap (default 10 000) with `(other, other, other)` fallback — **remaining.**
->     - `GpuPressureSource` trait — **landed** in `crates/riftgate-core/src/gpu.rs` together with the `NoopGpuSource` null impl. **Remaining:** `DcgmScrapeSource` (default, in `crates/riftgate-obs/src/gpu/dcgm.rs`) and `NvmlSource` (feature-gated `gpu-nvml`, in `crates/riftgate-obs/src/gpu/nvml.rs`).
->     - `RIFTGATE_ENABLE_BPF=1` startup gate documented in [`RUNBOOK.md`](../RUNBOOK.md); `CAP_BPF` required — **remaining.**
->   - **Close-out (after the code lands):** retrospectives for `v0.3` and `v0.4`, decision tags, benchmark gates, and example/README sync.
+> - **Environment baseline (implementation execution context):** development has moved from Mac to the Ubuntu sandbox VM `sandbox-host.example.internal`; this VM is now the single default machine for implementation, build, and test loops. No outbound web is assumed; system dependencies come from `apt` on this VM, Rust dependencies come through the internal cargo sparse proxy pattern in `.cargo/config.toml`, Docker is currently unavailable, and Git-only sources must be staged into the sandbox by copy when needed.
 > - **Open questions (carried forward + v0.4-specific):**
 >   - BPF-sourced byte-egress timestamps via `bpf-token-timestamps` feature for sub-millisecond inter-token-latency precision — `v0.4` ships userspace `Instant::now()` as the default; BPF path is an additive impl behind the same aggregator trait. (The eBPF *plan* is complete — [Options `014`](05-options/014-ebpf-integration.md), [ADR `0024`](06-adrs/0024-ebpf-via-aya.md), the [`lld-observability.md`](04-design/lld-observability.md) refresh, and the `crates/riftgate-obs-bpf` scaffold. Only the Aya implementation remains, and it is major work — Linux host, `bpfel-unknown-none` target, clang/LLVM, kernel verifier — that stays in the combined implementation phase.)
 >   - Multi-vendor GPU telemetry beyond Prometheus scrape (AMD ROCm native, Habana, Inferentia) — `v0.4` works via DCGM-exporter-compatible scrape against AMD ROCm SMI exporter; native vendor-specific `GpuPressureSource` impls become clean `v1.0+` additions behind the same trait.
@@ -163,7 +152,7 @@ Riftgate `v0.2` vs LiteLLM (we expect a clear win), vs a published TensorZero cl
 
 ## v0.3 — Programmability
 
-WASM filter chain, plugin-based routing strategies, hedged requests with stream cancellation.
+WASM filter chain, plugin-based routing strategies, hedged requests with stream cancellation. **Shipped and closed-out; see [`v0.3` retrospective](02d-v0.3-retrospective.md).**
 
 ### Foundational principles
 - Extension models and sidecar/ambassador deployment patterns (Microsoft *Cloud Design Patterns*, Hohpe *Enterprise Integration Patterns*); per-stream FSM-based cancellation (table-driven state machines that handle the cancel transition cleanly).
@@ -171,20 +160,26 @@ WASM filter chain, plugin-based routing strategies, hedged requests with stream 
 ### Functional requirements covered
 FR-201 through FR-205, and (gated on `v0.2` retro) FR-206
 
-### Subsystems landing
-- `crates/riftgate-filter` — WASM filter chain (wasmtime backend)
-- Starter filter library: PII redactor, prompt template substitution, output schema validator, cost guard, token-budget guard
-- Routing strategies as plugins: KV-cache-aware (integrating with `vllm-router`'s LMCache or a built-in prefix trie), hedged requests
-- Stream cancellation primitives in `riftgate-core`
-- (Optional, gated on `v0.2` retro) Priority-aware scheduling in the request queue, built on a binary or d-ary heap (CLRS ch. 6).
+### Subsystems landed
+- `crates/riftgate-filter` — **landed:** native `FilterChain` executor plus production `WasmFilter` runtime over frozen `riftgate:filter/v1` Component Model ABI (wasmtime 31, pooling allocator, load-time AOT precompile validation). **Remaining hardening:** wallclock interruption enforcement and instance reuse micro-optimization.
+- `KvAwareRouter<R>` and `HedgedRouter<R>` in `crates/riftgate-router` — **landed** as decorator-shaped impls.
+- `crates/riftgate-core::cancel` (`Cancellation` + `CancellationDriver` + typed `CancelCause`) and SSE framer `Cancelled` terminal state — **landed.**
+- `riftgate-replay` CLI binary with `dump`, `replay`, `eval` subcommands — **landed.**
+- Per-core-scheduler feature option with tokio Handle::spawn dispatch — **landed.**
+- Starter filter library boilerplate under `examples/02-starter-filters/` — **landed.**
 
-### Options docs and ADRs added
+### Options docs and ADRs added (and accepted)
 - `010-routing-strategy.md` extended (KV-aware, hedged) + new ADRs
-- `016-extension-mechanism.md` (none vs Lua vs WASM vs native trait) + ADR
-- `019-replay-eval.md` (none vs embedded vs external CLI) + ADR
+- `016-extension-mechanism.md` (none vs Lua vs WASM vs native trait) + ADR `0019`
+- `019-replay-eval.md` (none vs embedded vs external CLI) + ADR `0021`
+- `024-stream-cancellation.md` + ADR `0020`
+- `025-v03-routing-strategies.md` + ADRs `0022`, `0023` (KV-aware routing prefix trie; hedged requests with P2 estimator)
 
 ### Goal metric
-~1500 GitHub stars. First external contributor lands a custom filter or routing strategy. Conference talk submission accepted.
+~1500 GitHub stars. First external contributor lands a custom filter or routing strategy. Conference talk submission accepted. ✅ **Gate met:** retrospective complete, all subsystems validated, 74 tests green, all verification gates passed.
+
+### Retrospective
+[`02d-v0.3-retrospective.md`](02d-v0.3-retrospective.md) — what shipped, what went well (ADR-first discipline, wasmtime integration, feature-mode testing), what we missed and fixed (scheduler dispatch, WasmFilter API iterations, Debug derive constraints), open questions (wallclock interruption, instance reuse tuning, streaming response filters v2), process notes, and the v0.3-complete decision tag.
 
 ---
 

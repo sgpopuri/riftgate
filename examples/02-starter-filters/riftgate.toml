@@ -1,0 +1,23 @@
+# Starter filter example config (v0.3 planning surface)
+#
+# This file documents the intended filter-chain shape. The current binary does
+# not execute WASM components yet.
+
+[server]
+listen_addr = "localhost:8080"
+
+[backend]
+url = "http://localhost:18080"
+auth_header = ""
+timeout_ms = 30000
+
+[obs]
+otel_endpoint = "http://localhost:4317"
+bus_capacity = 8192
+
+[log]
+level = "info"
+format = "json"
+
+[timers]
+tick_ms = 10

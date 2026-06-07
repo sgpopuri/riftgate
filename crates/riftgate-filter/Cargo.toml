@@ -14,19 +14,20 @@ categories   = ["network-programming"]
 
 [features]
 # Default ships the native `FilterChain` executor over `Vec<Arc<dyn Filter>>`.
-# The `wasm` feature is reserved for the production `WasmFilter` impl that
-# binds the frozen `riftgate:filter/v1` Component Model ABI per
-# [ADR 0019](../../docs/06-adrs/0019-wasm-extension-mechanism.md). The
-# wasmtime runtime, the WIT bindings, and the host-function table land in
-# a follow-on PR within v0.3 Phase B; this crate currently exposes the
-# `WasmFilter::scaffold` placeholder so callers can compile against the
-# type surface today.
+# The `wasm` feature enables the production `WasmFilter` implementation
+# backed by wasmtime + the frozen `riftgate:filter/v1` Component Model ABI
+# per [ADR 0019](../../docs/06-adrs/0019-wasm-extension-mechanism.md).
 default = []
-wasm    = []
+wasm    = ["dep:wasmtime", "dep:parking_lot"]
 
 [dependencies]
 riftgate-core = { path = "../riftgate-core" }
 tracing       = { workspace = true }
+wasmtime      = { version = "31", optional = true, default-features = false, features = ["component-model", "wat", "runtime", "cranelift", "pooling-allocator"] }
+parking_lot   = { version = "0.12", optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

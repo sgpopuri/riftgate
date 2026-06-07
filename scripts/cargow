@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# On the Ubuntu sandbox host, pin to the locally installed toolchain to avoid
+# rustup stable-channel network sync to static.rust-lang.org.
+SANDBOX_HOST_FQDN="sandbox-host.example.internal"
+SANDBOX_HOST_SHORT="sandbox-host"
+SANDBOX_TOOLCHAIN="1.91.1-x86_64-unknown-linux-gnu"
+
+host_fqdn="$(hostname -f 2>/dev/null || hostname)"
+host_short="$(hostname -s 2>/dev/null || hostname)"
+
+if [[ "${host_fqdn}" == "${SANDBOX_HOST_FQDN}" || "${host_short}" == "${SANDBOX_HOST_SHORT}" ]]; then
+  exec env RUSTUP_TOOLCHAIN="${SANDBOX_TOOLCHAIN}" cargo "$@"
+fi
+
+exec cargo "$@"

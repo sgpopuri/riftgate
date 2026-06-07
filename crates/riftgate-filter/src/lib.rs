@@ -1,6 +1,6 @@
 //! # riftgate-filter
 //!
-//! v0.3 filter chain executor + scaffold for the WASM filter ABI.
+//! v0.3 filter chain executor + WASM filter runtime.
 //!
 //! Per [ADR 0019](../../../docs/06-adrs/0019-wasm-extension-mechanism.md)
 //! and [Options 016](../../../docs/05-options/016-extension-mechanism.md):
@@ -9,12 +9,11 @@
 //!   [`riftgate_core::Filter`] implementations. It runs filters in *order*
 //!   on the request side and in *reverse order* on the response side, per
 //!   the canonical filter-chain shape (Envoy, Linkerd, Spin).
-//! - The [`WasmFilter`] type is a scaffold for the production WASM-component
-//!   impl that binds the frozen `riftgate:filter/v1` Component Model ABI.
-//!   The wasmtime runtime, the WIT bindings, AOT precompile, instance
-//!   pooling, fuel / memory / wallclock limits, and the host-function table
-//!   land in a follow-on implementation PR. The scaffold here lets every consumer
-//!   compile against the public type surface today.
+//! - The [`WasmFilter`] type binds the frozen `riftgate:filter/v1`
+//!   Component Model ABI behind the `wasm` cargo feature.
+//!   `WasmFilter::try_load` performs component loading + validation;
+//!   `WasmFilter::scaffold` is still available for identity behavior when
+//!   operators intentionally do not load a component.
 //!
 //! ## Filter ordering
 //!

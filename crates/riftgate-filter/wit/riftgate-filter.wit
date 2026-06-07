@@ -1,0 +1,44 @@
+package riftgate:filter@1.0.0;
+
+interface host {
+    log: func(level: string, message: string);
+    now-millis: func() -> u64;
+    emit-counter: func(name: string, value: u64);
+}
+
+interface filter-types {
+    record header {
+        name: string,
+        value: string,
+    }
+
+    record request {
+        method: string,
+        path: string,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    record response {
+        status: u16,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    variant action {
+        continue,
+        terminate(u16),
+    }
+}
+
+interface filter {
+    use filter-types.{action, request, response};
+
+    on-request: func(req: request) -> action;
+    on-response: func(resp: response) -> action;
+}
+
+world riftgate-filter {
+    import host;
+    export filter;
+}

@@ -170,6 +170,45 @@ There is exactly one live status surface in this repo: the **"Currently shipping
 
 ## 11. Conventions
 
+## 11.5 Ubuntu sandbox environment profile (current)
+
+The current implementation environment is a sandboxed Ubuntu VM with no outbound web access.
+
+- Primary development host: <prompt user for host>
+- Do not rely on any other machine for day-to-day build, test, or benchmark work unless the owner explicitly overrides this policy.
+- `sudo` + `apt` are allowed on this VM and should be the default path for system dependencies.
+- Cargo dependency resolution must use the internal sparse proxy registry pattern shown below, not direct crates.io access.
+- In this sandbox, `rustup` on the `stable` channel may try to reach `static.rust-lang.org` and fail. Use the locally installed toolchain explicitly: `RUSTUP_TOOLCHAIN=1.91.1-x86_64-unknown-linux-gnu`.
+- If a dependency is only available from Git and not mirrored via the approved proxy path, the owner must stage/copy it from Mac into the sandbox before use.
+- Docker is currently unavailable in this environment; do not require Docker-based flows for implementation-critical loops.
+
+Canonical Rust install path in this sandbox (when toolchain is missing):
+
+```bash
+tar xf /net/internal-mirror.example/ict_non-byc/rust-1.91.1/bin/rust-1.91.1-x86_64-unknown-linux-gnu.tar.xz
+sudo rust-1.91.1-x86_64-unknown-linux-gnu/install.sh
+rm -rf rust-1.91.1-x86_64-unknown-linux-gnu*
+sudo rm -rf /usr/local/lib/rustlib/src/rust
+sudo mkdir -p /usr/local/lib/rustlib/src/rust/
+sudo tar -x -C /usr/local/lib/rustlib/src/rust/ --strip-components=1 -f /net/internal-mirror.example/ict_non-byc/rust-1.91.1/src/rustc-1.91.1-src.tar.xz "rustc-1.91.1-src/library"
+sudo rm /usr/local/lib/rustlib/src/rust/library/Cargo*
+```
+
+Canonical cargo proxy stanza:
+
+```toml
+[registries.crates-io]
+index = "sparse+https://proxy.example.internal/cargo-crates-io/index/"
+
+[source.crates-io]
+replace-with = "artifactory"
+
+[source.artifactory]
+registry = "sparse+https://proxy.example.internal/cargo-crates-io/index/"
+```
+
+If this profile changes (host, proxy endpoint, Docker availability), update this section and the "Currently shipping" block in `docs/02-mvp-roadmap.md` in the same change.
+
 ### Code (when Rust lands)
 
 - Rust, stable toolchain, MSRV pinned in `rust-toolchain.toml`.

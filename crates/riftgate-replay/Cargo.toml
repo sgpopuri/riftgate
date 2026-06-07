@@ -12,11 +12,25 @@ readme       = "README.md"
 keywords     = ["riftgate", "wal", "log", "replay"]
 categories   = ["filesystem", "asynchronous"]
 
+[[bin]]
+name = "riftgate-replay"
+path = "src/bin/riftgate-replay.rs"
+
 [dependencies]
 riftgate-core = { path = "../riftgate-core" }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+base64 = "0.22"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name    = "wal"
+harness = false
 
 [lints]
 workspace = true

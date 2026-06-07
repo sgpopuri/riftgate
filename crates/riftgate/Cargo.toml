@@ -23,6 +23,11 @@ path = "src/lib.rs"
 name = "riftgate"
 path = "src/main.rs"
 
+[features]
+default = []
+# Opt into the v0.2 custom scheduler dispatch path.
+per-core-scheduler = []
+
 [dependencies]
 # Workspace crates.
 riftgate-core    = { path = "../riftgate-core" }
@@ -85,6 +90,10 @@ criterion        = { workspace = true }
 
 [[bench]]
 name    = "end_to_end"
+harness = false
+
+[[bench]]
+name    = "scheduler"
 harness = false
 
 [lints]
