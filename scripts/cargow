@@ -1,17 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# On the Ubuntu sandbox host, pin to the locally installed toolchain to avoid
-# rustup stable-channel network sync to static.rust-lang.org.
-SANDBOX_HOST_FQDN="sandbox-host.example.internal"
-SANDBOX_HOST_SHORT="sandbox-host"
-SANDBOX_TOOLCHAIN="1.91.1-x86_64-unknown-linux-gnu"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+local_env_file="${RIFTGATE_LOCAL_ENV_FILE:-${repo_root}/config/workspace.local.env}"
+
+if [[ -f "${local_env_file}" ]]; then
+  # shellcheck disable=SC1090
+  source "${local_env_file}"
+fi
 
 host_fqdn="$(hostname -f 2>/dev/null || hostname)"
 host_short="$(hostname -s 2>/dev/null || hostname)"
+env_host_fqdn="${RIFTGATE_ENV_HOST_FQDN:-${RIFTGATE_SANDBOX_HOST_FQDN:-}}"
+env_host_short="${RIFTGATE_ENV_HOST_SHORT:-${RIFTGATE_SANDBOX_HOST_SHORT:-}}"
+env_toolchain="${RIFTGATE_ENV_TOOLCHAIN:-${RIFTGATE_SANDBOX_TOOLCHAIN:-}}"
 
-if [[ "${host_fqdn}" == "${SANDBOX_HOST_FQDN}" || "${host_short}" == "${SANDBOX_HOST_SHORT}" ]]; then
-  exec env RUSTUP_TOOLCHAIN="${SANDBOX_TOOLCHAIN}" cargo "$@"
+if [[ -n "${env_toolchain}" ]] && [[ \
+  ( -n "${env_host_fqdn}" && "${host_fqdn}" == "${env_host_fqdn}" ) || \
+  ( -n "${env_host_short}" && "${host_short}" == "${env_host_short}" ) \
+]]; then
+  exec env RUSTUP_TOOLCHAIN="${env_toolchain}" cargo "$@"
 fi
 
 exec cargo "$@"

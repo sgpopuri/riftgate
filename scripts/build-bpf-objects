@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+out_dir="${repo_root}/crates/riftgate-obs-bpf/obj"
+
+cd "$repo_root"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ./scripts/build-bpf-objects [--mode placeholder|real] [--release] [--from <build-output-dir>] [--build-from-source] [--check-only]
+
+Behavior:
+  Mode `placeholder` (default):
+    Builds the in-repo program-source bins in crates/riftgate-obs-bpf/programs
+    and emits canonical artifact names under crates/riftgate-obs-bpf/obj.
+
+  Mode `real`:
+    Stages prebuilt EM_BPF object files from --from <build-output-dir> into
+    canonical artifact names under crates/riftgate-obs-bpf/obj by delegating to
+    scripts/stage-bpf-objects with --verify-elf.
+    With --build-from-source, compiles in-repo Aya program sources for
+    bpfel-unknown-none and stages the generated objects.
+    With --check-only, validates and prints ELF metadata only (no copy).
+
+Canonical staged filenames:
+
+    cpu_sample.bpf.o
+    syscall_stall.bpf.o
+    tcp_retransmit.bpf.o
+
+Notes:
+  - `placeholder` mode writes ARTIFACT_FORMAT=host-placeholder.
+  - `real` mode writes ARTIFACT_FORMAT=staged-elf on successful staging.
+USAGE
+}
+
+mode=placeholder
+profile=debug
+from_dir=""
+check_only=0
+build_from_source=0
+
+nightly_active=0
+if "${repo_root}/scripts/cargow" rustc -vV 2>/dev/null | grep -q '^release: nightly'; then
+  nightly_active=1
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mode)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 2
+      fi
+      mode="$2"
+      shift 2
+      ;;
+    --release)
+      profile=release
+      shift
+      ;;
+    --from)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 2
+      fi
+      from_dir="$2"
+      shift 2
+      ;;
+    --check-only)
+      check_only=1
+      shift
+      ;;
+    --build-from-source)
+      build_from_source=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+if [[ "$mode" != "placeholder" && "$mode" != "real" ]]; then
+  echo "error: invalid --mode '$mode' (expected placeholder|real)" >&2
+  exit 2
+fi
+
+if [[ "$mode" == "real" ]]; then
+  if [[ "$profile" == "release" ]]; then
+    echo "error: --release is only valid in --mode placeholder" >&2
+    exit 2
+  fi
+
+  if [[ "$build_from_source" == "1" ]]; then
+    if [[ -n "$from_dir" ]]; then
+      echo "error: --from cannot be used with --build-from-source" >&2
+      exit 2
+    fi
+
+    target_triple="bpfel-unknown-none"
+    build_cmd=("${repo_root}/scripts/cargow" build --target "$target_triple" -p riftgate-obs-bpf-programs --features bpf-programs)
+    if [[ "$nightly_active" == "1" ]]; then
+      build_cmd+=( -Z build-std=core )
+    fi
+
+    if ! "${build_cmd[@]}"; then
+      echo "error: failed to build BPF objects from source for target $target_triple" >&2
+      if [[ "$nightly_active" != "1" ]]; then
+        echo "hint: active toolchain is not nightly; bpfel source build requires nightly with -Z build-std=core" >&2
+      fi
+      echo "hint: ensure rust-src is installed at /usr/local/lib/rustlib/src/rust/library/core" >&2
+      echo "hint: alternatively use --mode real --from <build-output-dir> with externally built EM_BPF objects" >&2
+      exit 1
+    fi
+
+    from_dir="${repo_root}/target/${target_triple}/debug"
+  elif [[ -z "$from_dir" ]]; then
+    echo "error: --mode real requires --from <build-output-dir> or --build-from-source" >&2
+    exit 2
+  fi
+
+  stage_args=(--from "$from_dir" --verify-elf)
+  if [[ "$check_only" == "1" ]]; then
+    stage_args+=(--check-only)
+  fi
+  "${repo_root}/scripts/stage-bpf-objects" "${stage_args[@]}"
+  if [[ "$check_only" == "1" ]]; then
+    echo "done: real BPF preflight validation completed from $from_dir"
+  else
+    echo "done: real BPF staging completed from $from_dir"
+  fi
+  exit 0
+fi
+
+if [[ -n "$from_dir" ]]; then
+  echo "error: --from is only valid in --mode real" >&2
+  exit 2
+fi
+if [[ "$build_from_source" == "1" ]]; then
+  echo "error: --build-from-source is only valid in --mode real" >&2
+  exit 2
+fi
+if [[ "$check_only" == "1" ]]; then
+  echo "error: --check-only is only valid in --mode real" >&2
+  exit 2
+fi
+
+mkdir -p "$out_dir"
+
+build_args=(
+  build
+  -p riftgate-obs-bpf-programs
+)
+if [[ "$profile" == "release" ]]; then
+  build_args+=(--release)
+fi
+
+"${repo_root}/scripts/cargow" "${build_args[@]}"
+
+target_dir="${repo_root}/target/${profile}"
+for slot in cpu_sample syscall_stall tcp_retransmit; do
+  src="${target_dir}/${slot}"
+  dst="${out_dir}/${slot}.bpf.o"
+  if [[ ! -f "$src" ]]; then
+    echo "error: expected build artifact not found: $src" >&2
+    exit 1
+  fi
+  cp "$src" "$dst"
+  chmod 0644 "$dst"
+  echo "built: $dst"
+done
+
+printf '%s\n' 'host-placeholder' > "${out_dir}/ARTIFACT_FORMAT"
+
+echo "done: bpf object artifacts written to $out_dir (format=host-placeholder)"

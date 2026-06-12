@@ -12,8 +12,15 @@ readme       = "README.md"
 keywords     = ["riftgate", "observability", "opentelemetry", "otlp"]
 categories   = ["development-tools::debugging", "asynchronous"]
 
+[features]
+default  = []
+bpf      = ["dep:aya", "dep:riftgate-obs-bpf", "riftgate-obs-bpf/bpf"]
+gpu-nvml = ["dep:nvml-wrapper"]
+
 [dependencies]
+aya                = { workspace = true, optional = true }
 riftgate-core      = { path = "../riftgate-core" }
+riftgate-obs-bpf   = { path = "../riftgate-obs-bpf", optional = true }
 crossbeam-channel  = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }
@@ -21,6 +28,13 @@ tracing            = { workspace = true }
 opentelemetry      = { workspace = true }
 opentelemetry_sdk  = { workspace = true }
 opentelemetry-otlp = { workspace = true }
+hdrhistogram     = { workspace = true }
+rand             = { workspace = true }
+
+dashmap          = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nvml-wrapper = { workspace = true, optional = true }
 
 [lints]
 workspace = true

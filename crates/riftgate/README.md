@@ -44,6 +44,7 @@ This crate is the integration point. The interesting code is in:
                 Observability (riftgate-obs)
    ┌────────────────────────────────────────────────────────────┐
    │  Bus (bounded MPSC, drop-on-full)                          │
+        │      ┌─> BpfSink (Linux + `bpf` feature + env gate)        │
    │      ┌─> OtelSink (OTLP/gRPC)                              │
    │      └─> JsonStdoutSink                                    │
    └────────────────────────────────────────────────────────────┘
@@ -114,3 +115,14 @@ curl -v http://localhost:8080/v1/chat/completions \
 
 For a fully self-contained dev loop see
 [`examples/01-basic-openai-proxy`](../../examples/01-basic-openai-proxy/README.md).
+
+## Optional features
+
+- `--features bpf` on this crate forwards to `riftgate-obs/bpf` and compiles
+  the Linux-only Aya `BpfSink` path.
+- `--features gpu-nvml` on this crate forwards to `riftgate-obs/gpu-nvml` and
+  enables the Linux-only NVML FFI GPU-pressure source.
+
+The BPF runtime remains opt-in even when compiled in: set
+`RIFTGATE_ENABLE_BPF=1` to enable the sink at startup; otherwise it stays in
+`DisabledByEnv` state.

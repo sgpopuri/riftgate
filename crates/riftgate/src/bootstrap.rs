@@ -5,7 +5,7 @@
 
 use crate::error::RiftgateError;
 use riftgate_config::{Config, LogFormat};
-use riftgate_obs::{Bus, JsonStdoutSink, MultiSink, OtelSink};
+use riftgate_obs::{BpfRuntimeState, BpfSink, Bus, JsonStdoutSink, MultiSink, OtelSink};
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
@@ -70,8 +70,10 @@ pub fn build_observability(
     config: &Config,
 ) -> (Bus, Option<opentelemetry_sdk::trace::TracerProvider>) {
     let json: Arc<dyn riftgate_core::obs::ObservabilitySink> = Arc::new(JsonStdoutSink::stdout());
+    let bpf_sink = BpfSink::from_env();
+    let bpf_state = bpf_sink.state().clone();
 
-    let mut multi = MultiSink::new().with(json);
+    let mut multi = MultiSink::new().with(json).with(Arc::new(bpf_sink));
     let otel_provider = match init_otel(&config.obs.otel_endpoint) {
         Ok(provider) => {
             let otel: Arc<dyn riftgate_core::obs::ObservabilitySink> = Arc::new(OtelSink::new());
@@ -88,6 +90,18 @@ pub fn build_observability(
             None
         }
     };
+
+    match &bpf_state {
+        BpfRuntimeState::CompiledOut => {
+            tracing::info!("BPF sink compiled out (requires Linux + riftgate-obs `bpf` feature)");
+        }
+        BpfRuntimeState::DisabledByEnv => {
+            tracing::info!("BPF sink available but disabled (`RIFTGATE_ENABLE_BPF=1` to enable)");
+        }
+        BpfRuntimeState::Loaded { programs } => {
+            tracing::info!(programs = ?programs, "BPF sink enabled and program slots loaded");
+        }
+    }
 
     let multi_arc: Arc<dyn riftgate_core::obs::ObservabilitySink> = Arc::new(multi);
     let bus = Bus::new(config.obs.bus_capacity, multi_arc);

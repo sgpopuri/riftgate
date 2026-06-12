@@ -27,7 +27,7 @@ where
     I: AsyncIO,
     F: FnMut() -> std::io::Result<I>,
 {
-    let listener = TcpListener::bind("localhost:0").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let addr = listener.local_addr().unwrap();
 
@@ -53,7 +53,7 @@ where
     I: AsyncIO,
     F: FnMut() -> std::io::Result<I>,
 {
-    let listener = TcpListener::bind("localhost:0").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let addr = listener.local_addr().unwrap();
 
@@ -101,7 +101,7 @@ where
     I: AsyncIO,
     F: FnMut() -> std::io::Result<I>,
 {
-    let listener = TcpListener::bind("localhost:0").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let addr = listener.local_addr().unwrap();
 

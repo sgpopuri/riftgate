@@ -35,6 +35,7 @@
 use crate::health;
 use crate::shutdown::DrainReceiver;
 use crate::upstream::{UpstreamClient, UpstreamReqBody};
+use arc_swap::ArcSwap;
 use bumpalo::Bump;
 use bytes::Bytes;
 use http::{HeaderName, HeaderValue, Method, Response, StatusCode, Uri};
@@ -70,7 +71,7 @@ pub struct HandlerState {
     pub pool: Arc<BackendPool>,
     /// Live per-backend signals. v0.1 uses an empty signal set; v0.2
     /// updates it from `Router::on_response`.
-    pub signals: Arc<BackendSignals>,
+    pub signals: Arc<ArcSwap<BackendSignals>>,
     /// Hyper-rustls upstream client.
     pub upstream: UpstreamClient,
     /// Observability publisher (drop-on-full bus).
@@ -152,7 +153,7 @@ pub async fn handle(
     let core_req = build_core_request(request_id, &method, &path, body_bytes.as_ref());
     let decision = state
         .router
-        .route(&core_req, state.pool.as_ref(), state.signals.as_ref());
+        .route(&core_req, state.pool.as_ref(), state.signals.load().as_ref());
 
     let backend_id = match &decision {
         RoutingDecision::Send(id) => *id,

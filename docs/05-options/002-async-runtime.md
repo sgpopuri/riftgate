@@ -53,7 +53,7 @@ We evaluate five candidates spanning the Rust async-runtime spectrum, from the e
 ```rust
 #[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 async fn main() -> Result<()> {
-    let listener = tokio::net::TcpListener::bind("localhost:8080").await?;
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
     loop {
         let (stream, _) = listener.accept().await?;
         tokio::spawn(handle(stream));

@@ -4,7 +4,7 @@
 # See the example README for what to look for once it's running.
 
 [server]
-listen_addr    = "[::1]:8080"
+listen_addr    = "127.0.0.1:8080"
 # `worker_threads` left unset so Tokio autodetects the CPU count.
 
 [backend]
@@ -17,7 +17,7 @@ timeout_ms     = 30_000
 tick_resolution_ms = 10
 
 [obs]
-otel_endpoint  = "http://localhost:4317"
+otel_endpoint  = "http://127.0.0.1:4317"
 sample_rate    = 0.01
 bus_capacity   = 4096
 

@@ -1,0 +1,45 @@
+[package]
+name         = "riftgate-obs-bpf-programs"
+description  = "Source crate for Riftgate v0.4 Aya eBPF program objects (cpu_sample, syscall_stall, tcp_retransmit)."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+publish      = false
+
+[features]
+default = []
+bpf-programs = []
+
+[dependencies]
+aya-ebpf = { version = "0.1" }
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "cpu_sample"
+path = "src/bin/cpu_sample.rs"
+required-features = ["bpf-programs"]
+
+[[bin]]
+name = "syscall_stall"
+path = "src/bin/syscall_stall.rs"
+required-features = ["bpf-programs"]
+
+[[bin]]
+name = "tcp_retransmit"
+path = "src/bin/tcp_retransmit.rs"
+required-features = ["bpf-programs"]
+
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+unreachable_pub = "warn"
+rust_2024_compatibility = { level = "warn", priority = -1 }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

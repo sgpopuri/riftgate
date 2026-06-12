@@ -49,7 +49,7 @@ The durable, theory-of-the-system knowledge for each subsystem lives next to the
 | Config | [`docs/05-options/015-config-model.md`](docs/05-options/015-config-model.md) | `crates/riftgate-config` (TOML + env override + fail-loudly validator) — shipped v0.1 |
 | Routing | [`docs/04-design/lld-routing.md`](docs/04-design/lld-routing.md) | `crates/riftgate-router` (`RoundRobinRouter` + `ConstantRouter`) — shipped v0.1; `WeightedRandomRouter` + `CircuitBreakerArbiter` — shipped v0.2; `KvAwareRouter` + `HedgedRouter` in v0.3 per [ADR 0022](docs/06-adrs/0022-kv-aware-routing-prefix-trie.md) and [ADR 0023](docs/06-adrs/0023-hedged-requests-p99-triggered.md) |
 | Filter chain | [`docs/04-design/lld-filter-chain.md`](docs/04-design/lld-filter-chain.md) | trait in `crates/riftgate-core` (`IdentityFilter` + `LoggingFilter`) — shipped v0.1; `FilterChain` executor + `WasmFilter` in new crate `crates/riftgate-filter` in v0.3 per [Options `016`](docs/05-options/016-extension-mechanism.md) and [ADR 0019](docs/06-adrs/0019-wasm-extension-mechanism.md) |
-| Observability | [`docs/04-design/lld-observability.md`](docs/04-design/lld-observability.md) | `crates/riftgate-obs` (bounded MPSC bus + `OtelSink` + `JsonStdoutSink` + `MultiSink`) — shipped v0.1 |
+| Observability | [`docs/04-design/lld-observability.md`](docs/04-design/lld-observability.md) | `crates/riftgate-obs` (bounded MPSC bus + `OtelSink` + `JsonStdoutSink` + `MultiSink`) — shipped v0.1; `TokenLevelAggregator`, `DcgmScrapeSource`, feature-gated `NvmlSource`, and `BpfSink` scaffold — landed in v0.4; Aya programs and verifier harnesses remain in flight |
 | Binary | n/a | `crates/riftgate` (tokio runtime, accept loop, hyper-rustls upstream client, SSE forwarding, `/health` + `/ready`, SIGTERM drain) — shipped v0.1 |
 | Rate limiting | [`docs/04-design/lld-rate-limiter.md`](docs/04-design/lld-rate-limiter.md) | trait in `crates/riftgate-core`; `TokenBucketLimiter` in `crates/riftgate-core` v0.2; a separate `crates/riftgate-rate-limit-*` crate emerges only if a distributed impl lands later, per [Options `021`](docs/05-options/021-rate-limiting.md) and [ADR 0009](docs/06-adrs/0009-rate-limiter-trait-in-proc-only.md) |
 | MCP capability broker | [`docs/04-design/lld-mcp-capability.md`](docs/04-design/lld-mcp-capability.md) | trait in `crates/riftgate-core`; `crates/riftgate-mcp` impl in v0.5 per [Options `026`](docs/05-options/026-mcp-orchestration.md) and [ADR 0015](docs/06-adrs/0015-mcp-extension-plane-broker.md) |
@@ -87,6 +87,7 @@ These are the project's **non-negotiable** properties. An agent that violates on
 - **Pluggability over performance.** When in doubt, choose the design that is easier to swap out. Riftgate is a framework, not a benchmark champion. We have explicitly declined to compete with TensorZero on raw P99.
 - **Honest numbers only.** Benchmarks must be reproducible, must include the harness, must compare against a real baseline (LiteLLM, an existing Rust gateway, or a vendor-published claim with citation). No vendor-style number-fishing.
 - **Anonymized war stories.** Documentation may draw on production experience but never names customers, employers, or proprietary systems.
+- **No local-environment leakage.** Hostnames, user IDs, internal mirror URLs, internal paths, credentials, tokens, and other machine-local or security-sensitive values must stay in ignored local config and must never be copied into tracked code, docs, harness files, examples, commits, or PR text.
 
 ---
 
@@ -114,6 +115,7 @@ If you are an agent producing a change in this repo, before declaring "done":
 - [ ] If I added a benchmark or perf claim, is it reproducible from the repo with `cargo bench`?
 - [ ] If I learned something that contradicts existing documentation, have I proposed a context correction?
 - [ ] Have I avoided introducing duplicate helpers (search before write — accretion is a real cost)?
+- [ ] Have I kept local-config values out of tracked files, examples, and PR text, using placeholders or ignored config instead?
 - [ ] If the change touches rate limiting, is every enforcement decision routed through the `RateLimiter` trait (no direct in-proc globals, no ad-hoc counters)?
 - [ ] If the change touches MCP, does it respect the per-tenant allowlist and emit a `McpAuditEvent` to the WAL via the `CapabilityBroker` trait?
 
@@ -170,44 +172,53 @@ There is exactly one live status surface in this repo: the **"Currently shipping
 
 ## 11. Conventions
 
-## 11.5 Ubuntu sandbox environment profile (current)
+## 11.5 Local environment profile (current)
 
-The current implementation environment is a sandboxed Ubuntu VM with no outbound web access.
+The current implementation environment is a local Ubuntu VM with no outbound web access.
 
-- Primary development host: <prompt user for host>
+- Machine-specific identifiers, internal mirror URLs, and local filesystem paths must live only in ignored local config: `config/workspace.local.env` and `.cargo/config.toml`.
+- Never quote or copy the concrete values from ignored local config into tracked docs, code comments, examples, commit messages, or PR descriptions; tracked surfaces must use placeholders or generic descriptions.
 - Do not rely on any other machine for day-to-day build, test, or benchmark work unless the owner explicitly overrides this policy.
 - `sudo` + `apt` are allowed on this VM and should be the default path for system dependencies.
-- Cargo dependency resolution must use the internal sparse proxy registry pattern shown below, not direct crates.io access.
-- In this sandbox, `rustup` on the `stable` channel may try to reach `static.rust-lang.org` and fail. Use the locally installed toolchain explicitly: `RUSTUP_TOOLCHAIN=1.91.1-x86_64-unknown-linux-gnu`.
-- If a dependency is only available from Git and not mirrored via the approved proxy path, the owner must stage/copy it from Mac into the sandbox before use.
-- Docker is currently unavailable in this environment; do not require Docker-based flows for implementation-critical loops.
+- Cargo dependency resolution may require an internal sparse proxy, but its concrete URL must stay out of git and be rendered into `.cargo/config.toml` from the ignored local config.
+- If the active toolchain is configured locally, use [`scripts/cargow`](scripts/cargow) so the wrapper injects the right `RUSTUP_TOOLCHAIN` automatically.
+- If a dependency is only available from Git and not mirrored through the approved proxy path, the owner must stage/copy it into the local environment before use.
+- Docker Engine and Docker Compose are available in this environment. Docker-based example and smoke-test flows are allowed when they are the narrowest useful validation, but do not assume registry pulls or other network-dependent Docker flows succeed unless the required images have already been staged locally.
 
-Canonical Rust install path in this sandbox (when toolchain is missing):
+Bootstrap the local config by copying `config/workspace.local.env.example` to `config/workspace.local.env` and filling in the host, toolchain, mirror, and internal tarball locations. Render `.cargo/config.toml` with `./scripts/render-cargo-config` after updating the local config.
+
+Canonical Rust install flow in this local environment (when the configured toolchain is missing):
 
 ```bash
-tar xf /net/internal-mirror.example/ict_non-byc/rust-1.91.1/bin/rust-1.91.1-x86_64-unknown-linux-gnu.tar.xz
-sudo rust-1.91.1-x86_64-unknown-linux-gnu/install.sh
-rm -rf rust-1.91.1-x86_64-unknown-linux-gnu*
+tar xf "$RIFTGATE_INTERNAL_RUST_BIN_TARBALL"
+sudo "$RIFTGATE_ENV_TOOLCHAIN"/install.sh
+rm -rf "$RIFTGATE_ENV_TOOLCHAIN"*
 sudo rm -rf /usr/local/lib/rustlib/src/rust
 sudo mkdir -p /usr/local/lib/rustlib/src/rust/
-sudo tar -x -C /usr/local/lib/rustlib/src/rust/ --strip-components=1 -f /net/internal-mirror.example/ict_non-byc/rust-1.91.1/src/rustc-1.91.1-src.tar.xz "rustc-1.91.1-src/library"
+sudo tar -x -C /usr/local/lib/rustlib/src/rust/ --strip-components=1 -f "$RIFTGATE_INTERNAL_RUST_SRC_TARBALL" "${RIFTGATE_ENV_TOOLCHAIN%%-*}-src/library"
 sudo rm /usr/local/lib/rustlib/src/rust/library/Cargo*
 ```
 
-Canonical cargo proxy stanza:
+Local cargo proxy config template:
 
 ```toml
 [registries.crates-io]
-index = "sparse+https://proxy.example.internal/cargo-crates-io/index/"
+index = "<internal sparse index url>"
 
 [source.crates-io]
-replace-with = "artifactory"
+replace-with = "<internal registry name>"
 
-[source.artifactory]
-registry = "sparse+https://proxy.example.internal/cargo-crates-io/index/"
+[registry]
+default = "<internal registry name>"
+
+[registries.<internal registry name>]
+index = "<internal sparse index url>"
+
+[source.<internal registry name>]
+registry = "<internal sparse index url>"
 ```
 
-If this profile changes (host, proxy endpoint, Docker availability), update this section and the "Currently shipping" block in `docs/02-mvp-roadmap.md` in the same change.
+If this profile changes (host class, mirror requirements, Docker availability), update this section and the "Currently shipping" block in `docs/02-mvp-roadmap.md` in the same change. Never commit the concrete local values.
 
 ### Code (when Rust lands)
 

@@ -27,6 +27,10 @@ path = "src/main.rs"
 default = []
 # Opt into the v0.2 custom scheduler dispatch path.
 per-core-scheduler = []
+# Opt into the v0.4 Aya-backed eBPF sink implementation.
+bpf = ["riftgate-obs/bpf"]
+# Opt into Linux NVML FFI GPU-pressure source (v0.4 escape hatch).
+gpu-nvml = ["riftgate-obs/gpu-nvml"]
 
 [dependencies]
 # Workspace crates.
@@ -38,6 +42,7 @@ riftgate-parser  = { path = "../riftgate-parser" }
 
 # Async runtime + IO.
 tokio            = { workspace = true }
+arc-swap         = { workspace = true }
 
 # Lock-free queues. ADR 0005 picks crossbeam-channel for the v0.1 sharded
 # MPMC backing; the v0.2 `PerShardScheduler` lives in this crate per the

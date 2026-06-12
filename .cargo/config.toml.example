@@ -1,0 +1,14 @@
+[registries.crates-io]
+index = "<internal sparse index url>"
+
+[source.crates-io]
+replace-with = "<internal registry name>"
+
+[registry]
+default = "<internal registry name>"
+
+[registries.<internal registry name>]
+index = "<internal sparse index url>"
+
+[source.<internal registry name>]
+registry = "<internal sparse index url>"

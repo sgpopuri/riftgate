@@ -30,3 +30,4 @@ The v0.1 observability surface, per [Options 013](../../docs/05-options/013-obse
 - `tests/multi_sink.rs` — verifies fan-out: every inner sink sees every event.
 - `tests/span_name_uniqueness.rs` — compile-time-style check that the canonical span name constants are pairwise unique strings.
 - `tests/otel_smoke.rs` — `#[ignore]` by default; run with `cargo test -- --ignored otel_smoke` against a local OTel collector to validate end-to-end OTLP export.
+- `tests/bpf_verifier.rs` — Linux + `bpf` feature-gated verifier/loader harness. Today it runs a minimal real Aya loader-path assertion (`Ebpf::load` rejects invalid object bytes) and locks stable `riftgate-obs-bpf` program-slot names; it grows into concrete verifier-acceptance assertions when BPF objects land.

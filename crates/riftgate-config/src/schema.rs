@@ -10,7 +10,7 @@
 
 use crate::secret::Secret;
 use serde::{Deserialize, Serialize};
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 
 /// Top-level configuration root.
 ///
@@ -60,7 +60,7 @@ impl Default for ServerConfig {
 }
 
 fn default_listen_addr() -> SocketAddr {
-    SocketAddr::from((Ipv4Addr::LOCALHOST, 8080))
+    "127.0.0.1:8080".parse().expect("valid default socket addr")
 }
 
 /// Default upstream backend.
@@ -130,7 +130,7 @@ const fn default_tick_resolution_ms() -> u32 {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObsConfig {
-    /// OTLP/gRPC endpoint for `OtelSink`. Default `http://localhost:4317`
+    /// OTLP/gRPC endpoint for `OtelSink`. Default `http://127.0.0.1:4317`
     /// (OTel collector convention).
     #[serde(default = "default_otel_endpoint")]
     pub otel_endpoint: String,
@@ -153,7 +153,7 @@ impl Default for ObsConfig {
 }
 
 fn default_otel_endpoint() -> String {
-    "http://localhost:4317".to_string()
+    "http://127.0.0.1:4317".to_string()
 }
 const fn default_sample_rate() -> f32 {
     0.01

@@ -54,7 +54,7 @@ fn one_round_trip(io: &mut MioIO, listener: &TcpListener) {
 }
 
 fn bench_accept_echo(c: &mut Criterion) {
-    let listener = TcpListener::bind("localhost:0").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let mut io = MioIO::new().unwrap();
     io.register(listener.as_raw_fd(), 1, Interest::READABLE)

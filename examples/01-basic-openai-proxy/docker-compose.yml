@@ -7,12 +7,13 @@
 
 services:
   otel-collector:
-    image: otel/opentelemetry-collector:0.116.0
+    image: otel/opentelemetry-collector-contrib:0.116.0
     container_name: riftgate-otel-collector
+    entrypoint: ["/otelcol-contrib"]
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
       - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
     ports:
-      - "localhost:4317:4317"   # OTLP/gRPC
-      - "localhost:4318:4318"   # OTLP/HTTP (unused by riftgate v0.1)
+      - "4317:4317"   # OTLP/gRPC
+      - "4318:4318"   # OTLP/HTTP (unused by riftgate v0.1)
     restart: "no"

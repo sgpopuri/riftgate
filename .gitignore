@@ -2,6 +2,8 @@
 *.local.md
 .local/
 notes/private/
+config/workspace.local.env
+.cargo/config.toml
 
 # Rust build / target output
 target/
@@ -22,6 +24,9 @@ flamegraph.svg
 perf.data
 perf.data.old
 
+# Local staged eBPF object artifacts (v0.4 Aya workflow)
+crates/riftgate-obs-bpf/obj/*.bpf.o
+
 # OS noise
 .DS_Store
 Thumbs.db
@@ -32,6 +37,3 @@ Thumbs.db
 .aider*
 *.swp
 *.swo
-
-# runbook
-RUNBOOK.md

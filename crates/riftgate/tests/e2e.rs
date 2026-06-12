@@ -13,6 +13,7 @@
 //! library modules directly so an `InMemorySink` can capture spans.
 
 use bytes::Bytes;
+use arc_swap::ArcSwap;
 use http::{Request, StatusCode};
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -116,7 +117,7 @@ async fn upstream_router(
 
 /// Spawn the mock upstream and return its address + a stop signal.
 async fn spawn_mock_upstream() -> (SocketAddr, oneshot::Sender<()>) {
-    let listener = TcpListener::bind("localhost:0")
+    let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind upstream");
     let addr = listener.local_addr().expect("local_addr");
@@ -156,7 +157,7 @@ async fn spawn_riftgate(
     shutdown::DrainSender,
 ) {
     let mut config = riftgate_config::Config::default();
-    config.server.listen_addr = SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0));
+    config.server.listen_addr = "127.0.0.1:0".parse().unwrap();
     config.backend.url = format!("http://{upstream_addr}");
     config.backend.timeout_ms = backend_timeout_ms;
     config.obs.bus_capacity = 256;
@@ -172,7 +173,7 @@ async fn spawn_riftgate(
 
     let upstream_client = gw_upstream::build_client();
     let pool = Arc::new(BackendPool::from_ids(vec![BackendId(0)]));
-    let signals = Arc::new(BackendSignals::new());
+    let signals = Arc::new(ArcSwap::from_pointee(BackendSignals::new()));
     let router: Arc<dyn riftgate_core::router::Router> = Arc::new(RoundRobinRouter::new());
 
     let (drain_tx, drain_rx) = shutdown::channel();
@@ -480,7 +481,7 @@ async fn ready_flips_to_503_during_drain() {
 #[tokio::test]
 async fn upstream_timeout_returns_504() {
     // An upstream that accepts but never responds.
-    let listener = TcpListener::bind("localhost:0").await.unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let upstream_addr = listener.local_addr().unwrap();
     let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
     tokio::spawn(async move {

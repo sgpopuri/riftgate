@@ -11,8 +11,13 @@
 use clap::Parser;
 use riftgate::error::RiftgateError;
 use riftgate::{bootstrap, proxy, server, shutdown, upstream};
+use riftgate::signals;
 use riftgate_config::{Env, load};
 use riftgate_core::router::{BackendId, BackendPool, BackendSignals};
+use riftgate_core::GpuPressureSource;
+use riftgate_obs::DcgmScrapeSource;
+use arc_swap::ArcSwap;
+use std::env;
 use riftgate_router::{
     CircuitBreakerArbiter, CircuitBreakerConfig, HedgedConfig, HedgedRouter, KvAwareConfig,
     KvAwareRouter, WeightedRandomRouter,
@@ -114,7 +119,7 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
 
     let upstream_client = upstream::build_client();
     let pool = Arc::new(BackendPool::from_ids(vec![BackendId(0)]));
-    let signals = Arc::new(BackendSignals::new());
+    let signals = Arc::new(ArcSwap::from_pointee(BackendSignals::new()));
     let weighted = WeightedRandomRouter::new(&[(BackendId(0), 1)]);
     let kv_aware = KvAwareRouter::new(weighted, KvAwareConfig::default());
     let hedged = HedgedRouter::new(kv_aware, HedgedConfig::default());
@@ -139,6 +144,30 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
         tracing::info!(signal, "received shutdown signal; beginning drain");
         shutdown::begin_drain(&drain_tx);
     });
+
+    if let Ok(endpoint) = env::var("RIFTGATE_GPU_DCGM_ENDPOINT") {
+        let signals_store = Arc::clone(&signals);
+        tokio::spawn(async move {
+            let source = DcgmScrapeSource::new(BackendId(0), endpoint, 0)
+                .with_timeout(Duration::from_secs(2));
+            tracing::info!(source = source.name(), "GPU pressure poller enabled");
+
+            let mut ticker = tokio::time::interval(Duration::from_secs(5));
+            loop {
+                ticker.tick().await;
+                match source.poll_once() {
+                    Ok(samples) => {
+                        signals::apply_gpu_pressure_updates(&signals_store, &samples);
+                    }
+                    Err(err) => {
+                        tracing::warn!(error = %err, "GPU pressure poll failed");
+                    }
+                }
+            }
+        });
+    } else {
+        tracing::info!("GPU pressure poller disabled (set RIFTGATE_GPU_DCGM_ENDPOINT to enable)");
+    }
 
     let state = proxy::HandlerState {
         config: Arc::new(config),

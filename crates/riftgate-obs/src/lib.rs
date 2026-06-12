@@ -25,14 +25,19 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
+pub mod bpf;
 mod bus;
+pub mod gpu;
 mod json_stdout_sink;
 mod multi_sink;
 mod otel_sink;
+pub mod token_level;
 
 pub mod spans;
 
+pub use bpf::{BpfRuntimeState, BpfSink, RIFTGATE_ENABLE_BPF_ENV};
 pub use bus::{Bus, Publisher};
+pub use gpu::DcgmScrapeSource;
 pub use json_stdout_sink::JsonStdoutSink;
 pub use multi_sink::MultiSink;
 pub use otel_sink::OtelSink;

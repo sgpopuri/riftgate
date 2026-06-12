@@ -1,0 +1,8 @@
+# Staged BPF object artifacts live here locally.
+# Canonical filenames:
+# - cpu_sample.bpf.o
+# - syscall_stall.bpf.o
+# - tcp_retransmit.bpf.o
+#
+# Artifacts are intentionally not tracked in git; this file keeps the
+# directory present so local workflows and test contracts are explicit.

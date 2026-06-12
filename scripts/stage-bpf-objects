@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+obj_dir="${repo_root}/crates/riftgate-obs-bpf/obj"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ./scripts/stage-bpf-objects --from <build-output-dir> [--verify-elf] [--check-only]
+
+Behavior:
+  Copies staged Aya object files into the canonical v0.4 contract paths:
+    crates/riftgate-obs-bpf/obj/cpu_sample.bpf.o
+    crates/riftgate-obs-bpf/obj/syscall_stall.bpf.o
+    crates/riftgate-obs-bpf/obj/tcp_retransmit.bpf.o
+
+Notes:
+  - This script does not compile BPF programs itself; it stages outputs that
+    were produced by your local Aya build pipeline.
+  - With --verify-elf, each source file must start with ELF magic bytes
+    (7f 45 4c 46) and report ELF machine `BPF` (EM_BPF), or the script exits
+    non-zero.
+  - With --check-only, validation runs and per-slot ELF details are printed,
+    but files are not copied and ARTIFACT_FORMAT is not modified.
+  - Source dir must contain exactly these filenames:
+      cpu_sample.bpf.o
+      syscall_stall.bpf.o
+      tcp_retransmit.bpf.o
+USAGE
+}
+
+verify_elf=0
+check_only=0
+src_dir=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --from)
+      if [[ $# -lt 2 ]]; then
+        usage
+        exit 2
+      fi
+      src_dir="$2"
+      shift 2
+      ;;
+    --verify-elf)
+      verify_elf=1
+      shift
+      ;;
+    --check-only)
+      check_only=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$src_dir" ]]; then
+  usage
+  exit 2
+fi
+
+if [[ ! -d "$src_dir" ]]; then
+  echo "error: source directory does not exist: $src_dir" >&2
+  exit 1
+fi
+
+if [[ "$verify_elf" -eq 1 ]] && ! command -v readelf >/dev/null 2>&1; then
+  echo "error: --verify-elf requires readelf in PATH" >&2
+  exit 1
+fi
+
+if [[ "$check_only" -eq 0 ]]; then
+  mkdir -p "$obj_dir"
+fi
+
+for slot in cpu_sample syscall_stall tcp_retransmit; do
+  src="$src_dir/${slot}.bpf.o"
+  dst="$obj_dir/${slot}.bpf.o"
+
+  if [[ ! -f "$src" ]]; then
+    echo "error: missing required staged object: $src" >&2
+    exit 1
+  fi
+
+  if [[ "$verify_elf" -eq 1 ]]; then
+    magic="$(xxd -p -l 4 "$src" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$magic" != "7f454c46" ]]; then
+      echo "error: invalid ELF magic for $src (got $magic, want 7f454c46)" >&2
+      exit 1
+    fi
+
+    elf_type="$(readelf -h "$src" | sed -n 's/^  Type:[[:space:]]*//p' | head -n1)"
+    machine="$(readelf -h "$src" | sed -n 's/^  Machine:[[:space:]]*//p' | head -n1)"
+    echo "checked: $src (type='$elf_type', machine='$machine')"
+
+    if [[ "$machine" != "BPF" ]]; then
+      echo "error: invalid ELF machine for $src (got '$machine', want 'BPF')" >&2
+      exit 1
+    fi
+  fi
+
+  if [[ "$check_only" -eq 0 ]]; then
+    cp "$src" "$dst"
+    chmod 0644 "$dst"
+    echo "staged: $dst"
+  fi
+done
+
+if [[ "$check_only" -eq 1 ]]; then
+  echo "done: validated staged objects from $src_dir (check-only)"
+  exit 0
+fi
+
+printf '%s\n' 'staged-elf' > "${obj_dir}/ARTIFACT_FORMAT"
+
+echo "done: staged objects available under $obj_dir (format=staged-elf)"

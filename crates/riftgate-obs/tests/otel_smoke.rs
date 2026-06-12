@@ -11,7 +11,7 @@
 //! because it requires Docker; see `examples/minimal-proxy`.
 
 #[test]
-#[ignore = "requires a local OTel collector on localhost:4317"]
+#[ignore = "requires a local OTel collector on 127.0.0.1:4317"]
 fn round_trip_against_local_otel_collector() {
     // Smoke-test stub: the actual SDK initialisation lives in the
     // `riftgate` binary's bootstrap (Phase I). When invoked here, we

@@ -16,6 +16,8 @@
 - [v0.0 retrospective](02a-v0.0-retrospective.md)
 - [v0.1 retrospective](02b-v0.1-retrospective.md)
 - [v0.2 retrospective](02c-v0.2-retrospective.md)
+- [v0.3 retrospective](02d-v0.3-retrospective.md)
+- [v0.4 retrospective](02e-v0.4-retrospective.md)
 
 # Architecture
 

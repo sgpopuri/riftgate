@@ -26,6 +26,7 @@ members = [
     "crates/riftgate-io-uring",
     "crates/riftgate-filter",
     "crates/riftgate-obs-bpf",
+    "crates/riftgate-obs-bpf/programs",
 ]
 exclude = [
     # cargo-fuzz sub-packages are opt-in; cargo-fuzz invokes them
@@ -125,6 +126,17 @@ clap         = { version = "4.5",   features = ["derive", "env"] }
 # aggregates per [ADR 0025](docs/06-adrs/0025-token-level-metrics-probabilistic.md).
 xxhash-rust  = { version = "0.8",  features = ["xxh3"] }
 hdrhistogram = { version = "7.5",  default-features = false }
+
+# Randomness. For reservoir sampling (Vitter) in v0.4 TokenLevelAggregator.
+rand         = "0.8"
+
+# NVIDIA Management Library bindings. Optional, Linux-only, and used only by
+# the v0.4 `NvmlSource` escape hatch per ADR 0026.
+nvml-wrapper = "0.10"
+
+# Aya userspace runtime for v0.4 eBPF loader-path integration tests and sink
+# wiring, per ADR 0024. Kernel-privileged attach paths remain runtime-gated.
+aya          = "0.13"
 
 # Dev / bench / fuzz.
 criterion    = { version = "0.5",   features = ["async_tokio"] }

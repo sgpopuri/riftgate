@@ -58,7 +58,7 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 use riftgate_core::request::{Request, StatusCode};
 use riftgate_core::router::{
-    BackendId, BackendPool, BackendSignals, CircuitState, Router, RoutingDecision,
+    BackendId, BackendPool, BackendSignal, BackendSignals, CircuitState, Router, RoutingDecision,
 };
 
 /// Maximum number of eligible backends a `WeightedRandomRouter` honors.
@@ -78,6 +78,9 @@ struct AliasEntry {
 }
 
 const ALIAS_SCALE: u32 = 1 << 24;
+// v0.4 routing integration: treat backends at or above this scalar GPU pressure
+// as "hot" and prefer cooler closed backends when available.
+const HOT_GPU_PRESSURE_THRESHOLD: f32 = 0.90;
 
 /// Walker alias method router.
 ///
@@ -217,6 +220,12 @@ impl WeightedRandomRouter {
             entry.alias
         }
     }
+
+    fn is_hot(signal: &BackendSignal) -> bool {
+        signal
+            .gpu_pressure
+            .is_some_and(|p| p.clamp(0.0, 1.0) >= HOT_GPU_PRESSURE_THRESHOLD)
+    }
 }
 
 impl Router for WeightedRandomRouter {
@@ -229,21 +238,38 @@ impl Router for WeightedRandomRouter {
         if pool.is_empty() {
             return RoutingDecision::Reject(StatusCode::BAD_GATEWAY);
         }
-        // Try up to N samples; if every draw is on an open circuit,
-        // fall through to a linear scan to confirm everyone is open.
+        // Try up to N samples. Prefer closed + non-hot backends first,
+        // but remember one closed fallback in case every backend is hot.
         let n = self.backends.len();
+        let mut closed_fallback: Option<BackendId> = None;
         for _ in 0..n {
             let b = self.sample();
-            if !matches!(signals.get(b).circuit_state, CircuitState::Open) {
+            let signal = signals.get(b);
+            if matches!(signal.circuit_state, CircuitState::Open) {
+                continue;
+            }
+            closed_fallback.get_or_insert(b);
+            if !Self::is_hot(&signal) {
                 return RoutingDecision::Send(b);
             }
         }
-        // Linear scan as a safety net.
+
+        // Linear scan as a safety net. Prefer first closed + non-hot.
         for b in pool.iter() {
-            if !matches!(signals.get(b).circuit_state, CircuitState::Open) {
+            let signal = signals.get(b);
+            if matches!(signal.circuit_state, CircuitState::Open) {
+                continue;
+            }
+            closed_fallback.get_or_insert(b);
+            if !Self::is_hot(&signal) {
                 return RoutingDecision::Send(b);
             }
         }
+
+        if let Some(b) = closed_fallback {
+            return RoutingDecision::Send(b);
+        }
+
         RoutingDecision::Reject(StatusCode::SERVICE_UNAVAILABLE)
     }
 }
@@ -339,6 +365,50 @@ mod tests {
         match r.route(&dummy_request(), &pool, &signals) {
             RoutingDecision::Reject(s) => assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE),
             other => panic!("expected Reject, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hot_gpu_backend_is_deprioritized_when_cool_backend_exists() {
+        let r = WeightedRandomRouter::with_seed(&[(BackendId(0), 1), (BackendId(1), 1)], 42);
+        let pool = BackendPool::from_ids(vec![BackendId(0), BackendId(1)]);
+        let signals = BackendSignals::from_vec(vec![
+            BackendSignal {
+                gpu_pressure: Some(0.99),
+                ..BackendSignal::default()
+            },
+            BackendSignal {
+                gpu_pressure: Some(0.20),
+                ..BackendSignal::default()
+            },
+        ]);
+
+        for _ in 0..50 {
+            match r.route(&dummy_request(), &pool, &signals) {
+                RoutingDecision::Send(b) => assert_eq!(b, BackendId(1)),
+                other => panic!("expected Send(1), got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn all_hot_backends_still_return_closed_backend() {
+        let r = WeightedRandomRouter::with_seed(&[(BackendId(0), 1), (BackendId(1), 1)], 99);
+        let pool = BackendPool::from_ids(vec![BackendId(0), BackendId(1)]);
+        let signals = BackendSignals::from_vec(vec![
+            BackendSignal {
+                gpu_pressure: Some(0.95),
+                ..BackendSignal::default()
+            },
+            BackendSignal {
+                gpu_pressure: Some(1.0),
+                ..BackendSignal::default()
+            },
+        ]);
+
+        match r.route(&dummy_request(), &pool, &signals) {
+            RoutingDecision::Send(BackendId(0) | BackendId(1)) => {}
+            other => panic!("expected Send on hot-closed backends, got {other:?}"),
         }
     }
 

@@ -28,6 +28,13 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
+/// Canonical relative location (from the repository root) where staged
+/// compiled BPF object artifacts live for loader and verifier harnesses.
+///
+/// The v0.4 follow-on Aya implementation emits one object file per program
+/// slot into this directory.
+pub const STAGED_OBJECT_DIR: &str = "crates/riftgate-obs-bpf/obj";
+
 /// Build-time descriptor — useful for runtime introspection and bench
 /// harnesses that want to know whether the BPF backend is compiled in.
 ///
@@ -57,5 +64,13 @@ impl BpfProgram {
             Self::SyscallStall => "syscall_stall",
             Self::TcpRetransmit => "tcp_retransmit",
         }
+    }
+
+    /// Canonical staged object file path relative to the repository root.
+    ///
+    /// Example: `crates/riftgate-obs-bpf/obj/cpu_sample.bpf.o`
+    #[must_use]
+    pub fn staged_object_relpath(self) -> String {
+        format!("{}/{}.bpf.o", STAGED_OBJECT_DIR, self.as_str())
     }
 }

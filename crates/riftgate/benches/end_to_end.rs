@@ -11,6 +11,7 @@
 //! pipeline regression.
 
 use bytes::Bytes;
+use arc_swap::ArcSwap;
 use criterion::{Criterion, criterion_main};
 use http::{Method, Request, StatusCode};
 use http_body_util::combinators::BoxBody;
@@ -46,7 +47,7 @@ async fn upstream_router(
 }
 
 async fn spawn_upstream() -> SocketAddr {
-    let listener = TcpListener::bind("localhost:0").await.unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
         while let Ok((stream, _)) = listener.accept().await {
@@ -62,7 +63,7 @@ async fn spawn_upstream() -> SocketAddr {
 
 async fn spawn_gateway(upstream: SocketAddr) -> SocketAddr {
     let mut config = riftgate_config::Config::default();
-    config.server.listen_addr = SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0));
+    config.server.listen_addr = "127.0.0.1:0".parse().unwrap();
     config.backend.url = format!("http://{upstream}");
     config.backend.timeout_ms = 5_000;
     config.obs.bus_capacity = 4096;
@@ -76,7 +77,7 @@ async fn spawn_gateway(upstream: SocketAddr) -> SocketAddr {
 
     let upstream_client = gw_upstream::build_client();
     let pool = Arc::new(BackendPool::from_ids(vec![BackendId(0)]));
-    let signals = Arc::new(BackendSignals::new());
+    let signals = Arc::new(ArcSwap::from_pointee(BackendSignals::new()));
     let router: Arc<dyn riftgate_core::router::Router> = Arc::new(RoundRobinRouter::new());
 
     let (drain_tx, drain_rx) = shutdown::channel();

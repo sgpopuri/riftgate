@@ -4,15 +4,15 @@
 # not execute WASM components yet.
 
 [server]
-listen_addr = "[::1]:8080"
+listen_addr = "127.0.0.1:8080"
 
 [backend]
-url = "http://localhost:18080"
+url = "http://127.0.0.1:18080"
 auth_header = ""
 timeout_ms = 30000
 
 [obs]
-otel_endpoint = "http://localhost:4317"
+otel_endpoint = "http://127.0.0.1:4317"
 bus_capacity = 8192
 
 [log]

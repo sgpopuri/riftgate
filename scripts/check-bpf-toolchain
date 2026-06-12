@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+
+cd "$repo_root"
+
+local_env_file="${RIFTGATE_LOCAL_ENV_FILE:-${repo_root}/config/workspace.local.env}"
+if [[ -f "${local_env_file}" ]]; then
+  # shellcheck disable=SC1090
+  source "${local_env_file}"
+fi
+
+host_fqdn="$(hostname -f 2>/dev/null || hostname)"
+host_short="$(hostname -s 2>/dev/null || hostname)"
+env_host_fqdn="${RIFTGATE_ENV_HOST_FQDN:-${RIFTGATE_SANDBOX_HOST_FQDN:-}}"
+env_host_short="${RIFTGATE_ENV_HOST_SHORT:-${RIFTGATE_SANDBOX_HOST_SHORT:-}}"
+env_toolchain="${RIFTGATE_ENV_TOOLCHAIN:-${RIFTGATE_SANDBOX_TOOLCHAIN:-}}"
+
+rustc_cmd=(rustc)
+if [[ -n "${env_toolchain}" ]] && [[ \
+  ( -n "${env_host_fqdn}" && "${host_fqdn}" == "${env_host_fqdn}" ) || \
+  ( -n "${env_host_short}" && "${host_short}" == "${env_host_short}" ) \
+]]; then
+  rustc_cmd=(env RUSTUP_TOOLCHAIN="${env_toolchain}" rustc)
+fi
+
+status_ok=0
+status_warn=0
+status_fail=0
+
+pass() {
+  printf 'PASS  %s\n' "$1"
+  status_ok=$((status_ok + 1))
+}
+
+warn() {
+  printf 'WARN  %s\n' "$1"
+  status_warn=$((status_warn + 1))
+}
+
+fail() {
+  printf 'FAIL  %s\n' "$1"
+  status_fail=$((status_fail + 1))
+}
+
+have_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+show_header() {
+  printf 'Riftgate BPF Toolchain Preflight\n'
+  printf 'repo: %s\n\n' "$repo_root"
+}
+
+check_host_tools() {
+  have_cmd readelf && pass "readelf available" || fail "readelf missing (required for EM_BPF validation)"
+  have_cmd xxd && pass "xxd available" || fail "xxd missing (required for ELF magic validation)"
+}
+
+check_rust_toolchain() {
+  if "${repo_root}/scripts/cargow" -vV >/dev/null 2>&1; then
+    pass "cargo reachable via scripts/cargow"
+  else
+    fail "scripts/cargow unable to invoke cargo"
+    return
+  fi
+
+  local rustc_path
+  rustc_path="$(command -v rustc || true)"
+  if [[ -n "$rustc_path" ]]; then
+    pass "rustc found at $rustc_path"
+  else
+    fail "rustc not in PATH"
+    return
+  fi
+
+  local rustc_vv
+  rustc_vv="$(${rustc_cmd[@]} -vV 2>/dev/null || true)"
+  if [[ "$rustc_vv" == *"release: "* ]]; then
+    local release host
+    release="$(printf '%s\n' "$rustc_vv" | sed -n 's/^release: //p' | head -n1)"
+    host="$(printf '%s\n' "$rustc_vv" | sed -n 's/^host: //p' | head -n1)"
+    pass "rustc release=$release host=$host"
+  else
+    warn "unable to read rustc -vV output"
+  fi
+
+  if [[ "$rustc_vv" == *"release: nightly"* ]]; then
+    pass "nightly toolchain active"
+  else
+    fail "non-nightly toolchain active (build-std=core for bpfel requires nightly cargo/rustc)"
+  fi
+}
+
+check_bpf_target() {
+  local target_file
+  target_file="$(mktemp)"
+  if ${rustc_cmd[@]} --print target-list >"$target_file" 2>/dev/null; then
+    if grep -qx 'bpfel-unknown-none' "$target_file"; then
+      pass "rustc knows target bpfel-unknown-none"
+    else
+      fail "rustc target list does not include bpfel-unknown-none"
+    fi
+  else
+    warn "rustc --print target-list unavailable in current environment"
+  fi
+  rm -f "$target_file"
+
+  pass "bpfel target check complete (prebuilt rust-std for bpfel is not expected)"
+}
+
+check_rust_src() {
+  local src_dirs=(
+    "/usr/local/lib/rustlib/src/rust/library/core"
+    "/usr/lib/rustlib/src/rust/library/core"
+  )
+  local found=0
+  for d in "${src_dirs[@]}"; do
+    if [[ -d "$d" ]]; then
+      pass "rust-src present at ${d%/library/core}"
+      found=1
+      break
+    fi
+  done
+  if [[ "$found" -eq 0 ]]; then
+    fail "rust-src (library/core) not found in common install paths"
+  fi
+}
+
+check_internal_mirror_hints() {
+  local local_env="${repo_root}/config/workspace.local.env"
+  if [[ -f "$local_env" ]]; then
+    pass "local env file found at config/workspace.local.env"
+    if grep -q '^RIFTGATE_INTERNAL_RUST_BIN_TARBALL=' "$local_env"; then
+      pass "RIFTGATE_INTERNAL_RUST_BIN_TARBALL configured"
+    else
+      warn "RIFTGATE_INTERNAL_RUST_BIN_TARBALL not set in local env"
+    fi
+    if grep -q '^RIFTGATE_INTERNAL_RUST_SRC_TARBALL=' "$local_env"; then
+      pass "RIFTGATE_INTERNAL_RUST_SRC_TARBALL configured"
+    else
+      warn "RIFTGATE_INTERNAL_RUST_SRC_TARBALL not set in local env"
+    fi
+  else
+    warn "config/workspace.local.env missing"
+  fi
+}
+
+summarize() {
+  printf '\nSummary: %d PASS, %d WARN, %d FAIL\n' "$status_ok" "$status_warn" "$status_fail"
+  if [[ "$status_fail" -gt 0 ]]; then
+    printf 'Result: NOT READY for --mode real --build-from-source\n'
+    exit 1
+  fi
+  printf 'Result: READY or PARTIALLY READY (check WARN items)\n'
+  exit 0
+}
+
+show_header
+check_host_tools
+check_rust_toolchain
+check_bpf_target
+check_rust_src
+check_internal_mirror_hints
+summarize

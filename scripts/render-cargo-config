@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+local_env_file="${RIFTGATE_LOCAL_ENV_FILE:-${repo_root}/config/workspace.local.env}"
+output_file="${1:-${repo_root}/.cargo/config.toml}"
+
+if [[ ! -f "${local_env_file}" ]]; then
+  echo "missing local config: ${local_env_file}" >&2
+  echo "copy config/workspace.local.env.example to config/workspace.local.env first" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "${local_env_file}"
+
+registry_name="${RIFTGATE_CARGO_REGISTRY_NAME:-}"
+registry_index_url="${RIFTGATE_CARGO_REGISTRY_INDEX_URL:-}"
+
+if [[ -z "${registry_name}" || -z "${registry_index_url}" ]]; then
+  echo "local config must define RIFTGATE_CARGO_REGISTRY_NAME and RIFTGATE_CARGO_REGISTRY_INDEX_URL" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "${output_file}")"
+
+cat > "${output_file}" <<EOF
+[registries.crates-io]
+index = "${registry_index_url}"
+
+[source.crates-io]
+replace-with = "${registry_name}"
+
+[registry]
+default = "${registry_name}"
+
+[registries.${registry_name}]
+index = "${registry_index_url}"
+
+[source.${registry_name}]
+registry = "${registry_index_url}"
+EOF
+
+echo "wrote ${output_file}"

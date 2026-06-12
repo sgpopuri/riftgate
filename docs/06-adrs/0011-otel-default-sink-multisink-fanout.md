@@ -21,7 +21,7 @@ The discipline:
 - `crates/riftgate-obs::bus` exposes a `Publisher` (held by the data plane, cheap-clone) and a `Subscriber` (held by the sink workers). Capacity defaults to 4096 events; configurable via the `[obs] bus_capacity` key per [ADR `0012`](0012-static-toml-env-override-v01.md). Drop-on-full is the only behavior; no "block" or "buffer-grow" mode exists.
 - The dropped count is exported as `riftgate_observability_dropped_total` (counter) on every sink that supports counters.
 - `MultiSink` holds `Vec<Arc<dyn ObservabilitySink>>` and fans out each event to each inner sink. The drop discipline is bus-level, not sink-level — `MultiSink` does not buffer.
-- `OtelSink` exports OTLP/gRPC via `opentelemetry-otlp` over `tonic`. Endpoint is configurable; default is `http://localhost:4317` (OTel collector convention).
+- `OtelSink` exports OTLP/gRPC via `opentelemetry-otlp` over `tonic`. Endpoint is configurable; default is `http://127.0.0.1:4317` (OTel collector convention).
 - `JsonStdoutSink` ships in `v0.1` alongside `OtelSink` for structured logs ([`NFR-OBS03`](../01-requirements/non-functional.md)) and for environments without a collector.
 - Span-name registry: `crates/riftgate-obs::spans` defines the canonical names from FR-006 as `pub const &'static str`. Span emission sites use these constants exclusively.
 - Cardinality discipline: `crates/riftgate-obs::labels::Labels` accepts keys only from a registered enum. There is no `set_attribute(&str, &str)` API on the public surface.
