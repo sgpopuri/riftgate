@@ -76,7 +76,10 @@ fn aya_loads_staged_object_when_present() {
     for slot in slots {
         let path = staged_object_path(slot);
         if !path.exists() {
-            eprintln!("skipping staged-object load test; missing {}", path.display());
+            eprintln!(
+                "skipping staged-object load test; missing {}",
+                path.display()
+            );
             return;
         }
 

@@ -8,20 +8,20 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+use arc_swap::ArcSwap;
 use clap::Parser;
 use riftgate::error::RiftgateError;
-use riftgate::{bootstrap, proxy, server, shutdown, upstream};
 use riftgate::signals;
+use riftgate::{bootstrap, proxy, server, shutdown, upstream};
 use riftgate_config::{Env, load};
-use riftgate_core::router::{BackendId, BackendPool, BackendSignals};
 use riftgate_core::GpuPressureSource;
+use riftgate_core::router::{BackendId, BackendPool, BackendSignals};
 use riftgate_obs::DcgmScrapeSource;
-use arc_swap::ArcSwap;
-use std::env;
 use riftgate_router::{
     CircuitBreakerArbiter, CircuitBreakerConfig, HedgedConfig, HedgedRouter, KvAwareConfig,
     KvAwareRouter, WeightedRandomRouter,
 };
+use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;

@@ -151,9 +151,11 @@ pub async fn handle(
     // for the router; the router only inspects the method and path
     // today, but the trait surface is forward-compatible.
     let core_req = build_core_request(request_id, &method, &path, body_bytes.as_ref());
-    let decision = state
-        .router
-        .route(&core_req, state.pool.as_ref(), state.signals.load().as_ref());
+    let decision = state.router.route(
+        &core_req,
+        state.pool.as_ref(),
+        state.signals.load().as_ref(),
+    );
 
     let backend_id = match &decision {
         RoutingDecision::Send(id) => *id,

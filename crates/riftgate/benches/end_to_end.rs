@@ -10,8 +10,8 @@
 //! `cargo bench --bench end_to_end` runs indicate a meaningful
 //! pipeline regression.
 
-use bytes::Bytes;
 use arc_swap::ArcSwap;
+use bytes::Bytes;
 use criterion::{Criterion, criterion_main};
 use http::{Method, Request, StatusCode};
 use http_body_util::combinators::BoxBody;

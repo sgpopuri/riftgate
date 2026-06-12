@@ -20,8 +20,8 @@ pub mod health;
 pub mod proxy;
 pub mod scheduler;
 pub mod server;
-pub mod signals;
 pub mod shutdown;
+pub mod signals;
 pub mod upstream;
 
 pub use error::RiftgateError;

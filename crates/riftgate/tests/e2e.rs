@@ -12,8 +12,8 @@
 //! launch the `riftgate` binary as a subprocess; we exercise the
 //! library modules directly so an `InMemorySink` can capture spans.
 
-use bytes::Bytes;
 use arc_swap::ArcSwap;
+use bytes::Bytes;
 use http::{Request, StatusCode};
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
