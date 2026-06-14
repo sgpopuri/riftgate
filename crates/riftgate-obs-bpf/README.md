@@ -18,8 +18,7 @@ Per [ADR 0024](../../docs/06-adrs/0024-ebpf-via-aya.md) and
   `BpfProgram::staged_object_relpath()` for loader/verifier harnesses.
 - Production Aya programs (CPU on/off-time sampling at 19 Hz, syscall
   stalls, TCP retransmits per upstream) and their generated skeletons land
-  in a follow-on implementation PR within the combined `v0.3 + v0.4`
-  implementation phase. Building them requires a Linux host with
+  as part of the `v0.4` implementation and close-out path. Building them requires a Linux host with
   Aya's prerequisites; CI gates that path separately from the macOS /
   cross-platform default build.
 

@@ -8,7 +8,7 @@
 
 **AF_XDP.** Linux socket type that pairs with an XDP eBPF program to bypass most of the kernel network stack while staying inside the kernel security model. See [Options 001 §3.5](05-options/001-io-model.md#35-af_xdp-kernel-assisted-bypass).
 
-**Aya.** A pure-Rust eBPF library; the planned eBPF runtime for Riftgate's [observability plane](03-architecture/observability-plane.md).
+**Aya.** A pure-Rust eBPF library; the shipped eBPF runtime substrate for Riftgate's [observability plane](03-architecture/observability-plane.md) in `v0.4`.
 
 **Backpressure.** A mechanism by which a downstream component signals an upstream component to slow down or stop. In Riftgate, backpressure is a *policy* (drop newest, drop oldest, block, return 503), not a *mechanism* — the mechanism is the bounded MPSC channel.
 

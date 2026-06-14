@@ -63,14 +63,16 @@ Filters can be authored in Rust (or any wasm32-wasip1-targeting language) and lo
 
 Capability grants are explicit per-filter in config. The default is no capabilities beyond request/response access.
 
-## Built-in starter filters (planned for `v0.3`)
+## Starter filter reference set
 
 - **PII redactor** — masks well-known PII patterns (emails, phone numbers, SSNs) from prompts and/or responses.
 - **Prompt template substitution** — applies a templated system prompt prefix.
 - **Output schema validator** — for JSON-mode responses, validates against a configured schema.
 - **Cost guard** — rejects requests whose estimated cost exceeds a per-tenant or per-route budget.
 
-## Built-in routing strategies (planned)
+These remain reference examples for the extension plane rather than a claim that each ships as a first-party built-in filter today. The `v0.3` milestone shipped the filter-chain executor, the frozen `riftgate:filter/v1` ABI, and starter boilerplate under `examples/02-starter-filters/`.
+
+## Built-in routing strategies
 
 - **Round-robin** (`v0.1`)
 - **Weighted-random** (`v0.2`)

@@ -6,9 +6,9 @@ Routing impls behind the `riftgate-core::router::Router` trait.
 |------|--------|----------|
 | `RoundRobinRouter` | shipped | `v0.1` |
 | `ConstantRouter` | shipped (test impl) | `v0.1` |
-| `WeightedRandomRouter` | planned | `v0.2` |
-| `KvAwareRouter` | planned | `v0.3` |
-| `HedgedRouter` | planned | `v0.3` |
+| `WeightedRandomRouter` | shipped | `v0.2` |
+| `KvAwareRouter` | shipped | `v0.3` |
+| `HedgedRouter` | shipped | `v0.3` |
 
 `RoundRobinRouter` uses a single `AtomicUsize` cursor over the `BackendPool`. The cursor is incremented with `Ordering::Relaxed`; perfect monotonicity is not required, only fair distribution over time. A statistical fairness test in `tests/fairness.rs` asserts that 3000 requests across 3 backends produce a per-backend count within ±10 of 1000.
 
