@@ -11,6 +11,7 @@
 use arc_swap::ArcSwap;
 use clap::Parser;
 use riftgate::error::RiftgateError;
+use riftgate::mcp;
 use riftgate::signals;
 use riftgate::{bootstrap, proxy, server, shutdown, upstream};
 use riftgate_config::{Env, load};
@@ -169,6 +170,7 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
         tracing::info!("GPU pressure poller disabled (set RIFTGATE_GPU_DCGM_ENDPOINT to enable)");
     }
 
+    let mcp_broker = mcp::build_mcp_broker(&config);
     let state = proxy::HandlerState {
         config: Arc::new(config),
         router,
@@ -177,6 +179,7 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
         upstream: upstream_client,
         publisher,
         drain: drain_rx.clone(),
+        mcp_broker,
     };
     let drain_grace = Duration::from_millis(cli.drain_grace_ms);
     let accepted = server::accept_loop(listener, state, drain_rx, drain_grace).await?;

@@ -39,6 +39,8 @@ riftgate-config  = { path = "../riftgate-config" }
 riftgate-router  = { path = "../riftgate-router" }
 riftgate-obs     = { path = "../riftgate-obs" }
 riftgate-parser  = { path = "../riftgate-parser" }
+riftgate-mcp     = { path = "../riftgate-mcp" }
+riftgate-replay  = { path = "../riftgate-replay" }
 
 # Async runtime + IO.
 tokio            = { workspace = true }
@@ -86,6 +88,9 @@ serde_json       = { workspace = true }
 
 # Errors.
 thiserror        = { workspace = true }
+
+# Random key generation for ephemeral MCP signing key (mcp.rs).
+rand             = { workspace = true }
 
 [dev-dependencies]
 # End-to-end tests stand the binary's library modules up against a

@@ -45,6 +45,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use pin_project::{pin_project, pinned_drop};
 use riftgate_config::Config;
+use riftgate_core::capability::CapabilityBroker;
 use riftgate_core::router::{BackendPool, BackendSignals, Outcome, Router, RoutingDecision};
 use riftgate_core::types::RequestId;
 use riftgate_obs::Publisher;
@@ -78,6 +79,10 @@ pub struct HandlerState {
     pub publisher: Publisher,
     /// Drain signal — used by the `/ready` handler.
     pub drain: DrainReceiver,
+    /// MCP capability broker (v0.5, ADR 0015). `None` when MCP is not
+    /// configured. `Some` when at least one tenant is enrolled under
+    /// `[mcp.tenants]` in the gateway config.
+    pub mcp_broker: Option<Arc<dyn CapabilityBroker>>,
 }
 
 /// Body type returned by [`handle`]. Boxed so streaming and
@@ -146,6 +151,58 @@ pub async fn handle(
             "request body is not valid JSON",
         ));
     }
+
+    // MCP capability authorization (v0.5, ADR 0015).
+    // For POST /mcp, parse the body and authorize against the per-tenant
+    // allowlist before forwarding. The broker writes an audit event for
+    // every decision (allow or deny).
+    let mcp_attestation = if method == Method::POST && path == "/mcp" {
+        if let Some(broker) = &state.mcp_broker {
+            match riftgate_mcp::parse(&body_bytes) {
+                Ok(mcp_req) => {
+                    // v0.5: resolve tenant from the x-riftgate-tenant header;
+                    // fall back to TenantId(0) when absent. Full multitenancy
+                    // config (name -> TenantId mapping) is a v0.5 follow-on.
+                    let tenant_id = parts
+                        .headers
+                        .get("x-riftgate-tenant")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .unwrap_or(0);
+                    let identity = riftgate_core::capability::TenantIdentity {
+                        tenant: riftgate_core::types::TenantId(tenant_id),
+                        principal: parts
+                            .headers
+                            .get("x-riftgate-principal")
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("default")
+                            .to_owned(),
+                    };
+                    match broker.authorize(&mcp_req, &identity) {
+                        riftgate_core::capability::CapabilityDecision::Allow {
+                            attestation,
+                        } => Some(attestation),
+                        riftgate_core::capability::CapabilityDecision::Deny { reason } => {
+                            return Ok(error_response(
+                                StatusCode::FORBIDDEN,
+                                reason.as_header_value(),
+                            ));
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Ok(error_response(
+                        StatusCode::BAD_REQUEST,
+                        &format!("invalid MCP request body: {e}"),
+                    ));
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     // Routing. The v0.1 binary builds a minimal `riftgate-core` Request
     // for the router; the router only inspects the method and path
@@ -222,6 +279,30 @@ pub async fn handle(
         HeaderName::from_static("x-riftgate-backend"),
         HeaderValue::from_str(&backend_id.to_string()).expect("backend id is ASCII-safe"),
     );
+
+    // Inject MCP attestation headers on authorized MCP requests.
+    if let Some(ref attest) = mcp_attestation {
+        let sig_hex: String = attest
+            .signature
+            .0
+            .iter()
+            .fold(String::new(), |mut s, b| {
+                use std::fmt::Write;
+                let _ = write!(s, "{b:02x}");
+                s
+            });
+        if let (Ok(caller_v), Ok(tool_v), Ok(sig_v)) = (
+            HeaderValue::from_str(&attest.caller.0.to_string()),
+            HeaderValue::from_str(&attest.subject),
+            HeaderValue::from_str(&sig_hex),
+        ) {
+            upstream_req = upstream_req
+                .header(HeaderName::from_static("riftgate-mcp-caller"), caller_v)
+                .header(HeaderName::from_static("riftgate-mcp-tool"), tool_v)
+                .header(HeaderName::from_static("riftgate-mcp-decision"), attest.decision)
+                .header(HeaderName::from_static("riftgate-mcp-signature"), sig_v);
+        }
+    }
 
     let upstream_req: hyper::Request<UpstreamReqBody> = upstream_req
         .body(Full::new(body_bytes))

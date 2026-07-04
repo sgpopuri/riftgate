@@ -1,0 +1,93 @@
+# Lima VM definition for Riftgate development.
+#
+# Usage:
+#   limactl start lima/riftgate.yaml   # create and start (first run ~5-10 min)
+#   limactl shell riftgate             # open a shell inside the VM
+#   limactl stop riftgate              # graceful shutdown
+#   limactl start riftgate             # start a stopped VM
+#   limactl list                       # status of all VMs
+#
+# VS Code Remote-SSH (run once on macOS after first start):
+#   limactl show-ssh --format config riftgate >> ~/.ssh/config
+#   # Then: VS Code -> Remote-SSH -> Connect to Host -> lima-riftgate
+#
+# See AGENTS.md §11.5 and RUNBOOK.md §Lima VM setup for the full walkthrough.
+# The instance name is derived from the filename: lima/riftgate.yaml -> "riftgate".
+# Lima sets the guest hostname to lima-riftgate.
+
+# Apple Virtualization Framework — lowest overhead on macOS 12+ (Intel and Apple Silicon).
+# Remove this line to fall back to QEMU if the host macOS version is older than 12.
+vmType: "vz"
+
+images:
+  # Ubuntu 24.04 LTS (Noble Numbat) — kernel 6.8, full BTF, eBPF-ready.
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img"
+    arch: "aarch64"
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+    arch: "x86_64"
+
+# Resource sizing: Rust workspace compilation is CPU and memory intensive.
+# The target/ directory can grow to 10-20 GiB across build profiles and benches.
+cpus: 4
+memory: "8GiB"
+disk: "60GiB"
+
+# virtiofs mount: the macOS home directory is writable at the same absolute path
+# inside the VM (e.g. ~/Downloads/.../Riftgate maps to the same path in the VM).
+mounts:
+  - location: "~"
+    writable: true
+
+provision:
+  # System packages installed once as root on first boot.
+  # Covers the eBPF toolchain and cargo build baseline from RUNBOOK.md.
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      apt-get update -q
+      apt-get install -y -q \
+          build-essential \
+          pkg-config \
+          clang \
+          libelf-dev \
+          linux-tools-common \
+          curl \
+          git \
+          ca-certificates
+
+  # Rust stable toolchain installed once for the Lima user.
+  # rust-toolchain.toml (channel: stable) is picked up automatically by cargo.
+  # Nightly is not provisioned here; install separately when needed for BPF
+  # source builds: rustup toolchain install nightly --component rust-src
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
+          -y \
+          --default-toolchain stable \
+          --component rustfmt \
+          --component clippy \
+          --component rust-src
+      # shellcheck disable=SC1091
+      source "$HOME/.cargo/env"
+      # Persist cargo env activation in shell profile.
+      grep -q 'cargo/env' "$HOME/.bashrc" 2>/dev/null || \
+          echo 'source "$HOME/.cargo/env"' >> "$HOME/.bashrc"
+      grep -q 'cargo/env' "$HOME/.profile" 2>/dev/null || \
+          echo 'source "$HOME/.cargo/env"' >> "$HOME/.profile"
+
+# Port forwarding: gateway and OTel collector ports land on macOS localhost.
+# Lima also auto-forwards guest ports when a process binds; these entries make
+# the forwarding explicit and persistent across VM restarts.
+portForwards:
+  - guestPort: 3000
+    hostPort: 3000
+    hostIP: "127.0.0.1"
+  - guestPort: 4317
+    hostPort: 4317
+    hostIP: "127.0.0.1"
+  - guestPort: 4318
+    hostPort: 4318
+    hostIP: "127.0.0.1"

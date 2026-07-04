@@ -44,7 +44,7 @@
 //!   Deferred (no v0.1 impl, trait shape only):
 //!     [RateLimiter::check]      (ships in v0.2 per ADR 0009)
 //!     [WAL::append]             (ships in v0.2)
-//!     [CapabilityBroker::check] (ships in v0.5 per ADR 0015)
+//!     [CapabilityBroker::authorize] (ships in v0.5 per ADR 0015)
 //! ```
 //!
 //! ## Discipline

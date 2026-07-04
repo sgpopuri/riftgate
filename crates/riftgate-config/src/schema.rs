@@ -35,6 +35,10 @@ pub struct Config {
     /// Log subscriber tuning.
     #[serde(default)]
     pub log: LogConfig,
+    /// MCP capability broker configuration (v0.5,
+    /// [ADR 0015](../../../docs/06-adrs/0015-mcp-extension-plane-broker.md)).
+    #[serde(default)]
+    pub mcp: McpConfig,
 }
 
 /// HTTP server configuration.
@@ -197,4 +201,82 @@ pub enum LogFormat {
     Json,
     /// Pretty multi-line for human reading. Default for `--dev` mode.
     Pretty,
+}
+
+// ---------------------------------------------------------------------------
+// MCP capability broker config (v0.5)
+// ---------------------------------------------------------------------------
+
+/// MCP capability broker configuration.
+///
+/// Controls whether MCP (`tools/call`, `resources/read`, etc.) requests are
+/// authorized against a per-tenant allowlist before forwarding. Configured
+/// under `[mcp]` in the gateway TOML file.
+///
+/// ```toml
+/// [mcp]
+/// enforce = true                  # false = dry-run (log denials, always pass)
+///
+/// [mcp.tenants."1"]               # numeric tenant id as string key
+/// allowed_tools             = ["search-web", "read-file"]
+/// denied_tools              = ["filesystem-write"]
+/// allowed_resource_prefixes = ["s3://acme-datasets/*"]
+/// time_bounded_grants = [
+///   { tool = "send-email", until_unix_secs = 1780000000 },
+/// ]
+/// ```
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct McpConfig {
+    /// When `true` (default), deny decisions return HTTP `403`.
+    /// When `false`, a `DryRunBroker` is used: denials are logged but every
+    /// request passes. Use this to calibrate allowlists before enforcing.
+    #[serde(default = "default_true")]
+    pub enforce: bool,
+    /// Per-tenant allowlists, keyed by numeric tenant ID as a string
+    /// (e.g. `"1"` maps to `TenantId(1)`). An empty map disables the broker.
+    #[serde(default)]
+    pub tenants: std::collections::HashMap<String, McpTenantConfig>,
+    /// Hex-encoded 32-byte HMAC signing key for attestation headers.
+    ///
+    /// If absent, a random ephemeral key is generated at startup (not
+    /// persistent across restarts). Pin this value in production.
+    #[serde(default)]
+    pub signing_key_hex: Option<String>,
+    /// Directory path for the MCP audit WAL.
+    ///
+    /// When set, every `authorize()` decision is appended to a durable
+    /// `FileWal` under this path. When absent, audit records are computed
+    /// but not persisted (development/test mode).
+    #[serde(default)]
+    pub wal_path: Option<String>,
+}
+
+/// Per-tenant MCP allowlist configuration.
+///
+/// Mirrors `riftgate_mcp::TenantAllowlist` exactly; duplicated here so
+/// `riftgate-config` stays independent of `riftgate-mcp`.
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct McpTenantConfig {
+    /// Tools this tenant may invoke.
+    #[serde(default)]
+    pub allowed_tools: Vec<String>,
+    /// Tools explicitly denied (takes precedence over `allowed_tools`).
+    #[serde(default)]
+    pub denied_tools: Vec<String>,
+    /// Resource URI prefixes this tenant may read. Trailing `*` is a prefix
+    /// glob (e.g. `"s3://acme-datasets/*"`).
+    #[serde(default)]
+    pub allowed_resource_prefixes: Vec<String>,
+    /// Temporary tool grants that expire at a given Unix timestamp.
+    #[serde(default)]
+    pub time_bounded_grants: Vec<McpTimeBoundedGrant>,
+}
+
+/// A temporary tool grant active until `until_unix_secs`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct McpTimeBoundedGrant {
+    /// Tool name this grant covers.
+    pub tool: String,
+    /// Grant expires when `now >= UNIX_EPOCH + until_unix_secs`.
+    pub until_unix_secs: u64,
 }

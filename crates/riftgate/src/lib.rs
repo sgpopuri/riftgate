@@ -17,6 +17,8 @@
 pub mod bootstrap;
 pub mod error;
 pub mod health;
+/// Build the MCP capability broker from gateway config (v0.5, ADR 0015).
+pub mod mcp;
 pub mod proxy;
 pub mod scheduler;
 pub mod server;

@@ -1,7 +1,7 @@
 # ADR 0015. MCP as a first-class citizen of the extension plane (gateway-as-broker)
 
-> **Date:** TBD (target acceptance: at the open of `v0.5`)
-> **Status:** proposed
+> **Date:** 2026-07-04
+> **Status:** accepted
 > **Options doc:** [026-mcp-orchestration](../05-options/026-mcp-orchestration.md)
 > **Deciders:** Sriram Popuri
 

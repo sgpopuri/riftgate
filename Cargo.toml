@@ -27,6 +27,7 @@ members = [
     "crates/riftgate-filter",
     "crates/riftgate-obs-bpf",
     "crates/riftgate-obs-bpf/programs",
+    "crates/riftgate-mcp",
 ]
 exclude = [
     # cargo-fuzz sub-packages are opt-in; cargo-fuzz invokes them
@@ -137,6 +138,12 @@ nvml-wrapper = "0.10"
 # Aya userspace runtime for v0.4 eBPF loader-path integration tests and sink
 # wiring, per ADR 0024. Kernel-privileged attach paths remain runtime-gated.
 aya          = "0.13"
+
+# HMAC-SHA256 for MCP attestation headers. ADR 0015 requires gateway-signed
+# attestation on allowed MCP requests so downstream MCP servers can verify
+# the authorization decision. Both crates are from the RustCrypto project.
+hmac         = "0.12"
+sha2         = { version = "0.10", features = ["oid"] }
 
 # Dev / bench / fuzz.
 criterion    = { version = "0.5",   features = ["async_tokio"] }

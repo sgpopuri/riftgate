@@ -4,38 +4,108 @@ Day-to-day commands for working in the Riftgate tree. This file complements [`AG
 
 If a command on this page contradicts something in `AGENTS.md` or an ADR, the ADR wins and this file is a bug.
 
+## Lima VM setup (macOS)
+
+All implementation, build, test, and benchmark work happens inside a Lima VM (Ubuntu 24.04 LTS)
+on macOS. The VM definition is tracked at [`lima/riftgate.yaml`](lima/riftgate.yaml) and
+provisioned Rust stable and all system packages automatically on first boot.
+
+### One-time macOS setup
+
+```bash
+brew install lima
+```
+
+### Create and start the VM
+
+```bash
+# First run — downloads Ubuntu 24.04 and runs cloud-init provisioning (~5-10 min).
+limactl start lima/riftgate.yaml
+```
+
+Subsequent starts are fast:
+
+```bash
+limactl start riftgate      # start a stopped VM
+limactl stop riftgate       # graceful shutdown
+limactl list                # status of all VMs
+```
+
+### Shell into the VM
+
+```bash
+limactl shell riftgate
+```
+
+The macOS home directory is mounted read-write at the same path inside the VM.
+The repo is accessible without any copy step.
+
+### VS Code Remote-SSH (one-time macOS setup)
+
+```bash
+limactl show-ssh --format config riftgate >> ~/.ssh/config
+```
+
+Then in VS Code: **Remote-SSH: Connect to Host** -> `lima-riftgate`.
+Rust Analyzer, clippy, and cargo run against the Linux toolchain transparently.
+
+### Bootstrap workspace config inside the VM
+
+Run once after the first `limactl start`:
+
+```bash
+limactl shell riftgate
+cd <path-to-repo>
+cp config/workspace.local.env.example config/workspace.local.env
+# Edit: set RIFTGATE_ENV_HOST_SHORT=lima-riftgate and RIFTGATE_ENV_TOOLCHAIN=stable.
+# Leave RIFTGATE_CARGO_REGISTRY_* and RIFTGATE_INTERNAL_RUST_* commented out.
+$EDITOR config/workspace.local.env
+./scripts/cargow check --workspace --all-targets   # smoke-check the toolchain
+```
+
+Do not run `./scripts/render-cargo-config` for the Lima profile; crates.io is
+reachable directly and no cargo proxy is needed.
+
 ## Prerequisites
 
 - Rust toolchain, channel pinned by [`rust-toolchain.toml`](rust-toolchain.toml) (currently stable, MSRV 1.85). `rustup` will install it automatically on first `cargo` invocation.
 - A POSIX-y OS for the data plane: Linux (epoll, optional io_uring) or macOS (kqueue). Windows is not a supported runtime target.
 - For the eBPF work landing in `v0.3`+: Linux 5.15+, `clang`, `libelf-dev`. Not required for `v0.2`.
 
-No system services are required to build or test. The examples directory uses Docker Compose for an end-to-end mock-backend loop, and the current sandbox can run that workflow when required images are already present locally.
+No system services are required to build or test. The examples directory uses Docker Compose for an end-to-end mock-backend loop; run `docker compose up -d` inside the Lima VM (install Docker via `sudo apt install docker.io` if not already present).
 
 ## Local environment profile (current)
 
 Current default implementation environment:
 
-- OS: Ubuntu VM
-- Network policy: no outbound web access assumed
-- Package install path: `sudo apt` on this VM
-- Container runtime: Docker Engine + Docker Compose available; remote image pulls may still fail under sandbox network policy
+- OS: Lima VM (Ubuntu 24.04 LTS) on macOS; VM definition at [`lima/riftgate.yaml`](lima/riftgate.yaml)
+- Network policy: full internet access via macOS host (crates.io, rustup, apt direct)
+- Package install path: `sudo apt` inside the VM (provisioned automatically by cloud-init on first start)
+- Container runtime: Docker Engine installable via `sudo apt install docker.io` inside the VM; image pulls work with internet access
 
-Concrete hostnames, internal mirror URLs, and internal share paths live only in the ignored local config file `config/workspace.local.env`.
+Concrete hostnames and local filesystem paths live only in the ignored local config file `config/workspace.local.env`.
 
 Source of truth for the profile shape is [`AGENTS.md`](AGENTS.md) §11.5.
 
-### Bootstrap local config
+### Bootstrap workspace config
+
+Run once inside the VM after the first `limactl start`:
 
 ```bash
+limactl shell riftgate
+cd <path-to-repo>
 cp config/workspace.local.env.example config/workspace.local.env
+# Set: RIFTGATE_ENV_HOST_SHORT=lima-riftgate  RIFTGATE_ENV_TOOLCHAIN=stable
+# Leave RIFTGATE_CARGO_REGISTRY_* and RIFTGATE_INTERNAL_RUST_* commented out.
 $EDITOR config/workspace.local.env
-./scripts/render-cargo-config
+./scripts/cargow check --workspace --all-targets
 ```
 
-### Rust toolchain in the local environment
+Do not run `./scripts/render-cargo-config` for the Lima profile; no cargo proxy is needed.
 
-`rustup` on the workspace channel may attempt a network sync against the public Rust distribution service, which can fail in this local environment. Prefer the in-repo wrapper so the locally configured toolchain is applied automatically on the host:
+### Rust toolchain
+
+Rust stable is provisioned automatically by the Lima VM definition. Use `scripts/cargow` for all cargo invocations:
 
 ```bash
 ./scripts/cargow check -p riftgate-core
@@ -43,46 +113,30 @@ $EDITOR config/workspace.local.env
 ./scripts/cargow clippy --workspace --all-targets --all-features -- --deny warnings
 ```
 
-If you need the explicit environment form, use the `RIFTGATE_ENV_TOOLCHAIN` value from `config/workspace.local.env`:
+If you need the explicit toolchain form:
 
 ```bash
 source config/workspace.local.env
 RUSTUP_TOOLCHAIN="$RIFTGATE_ENV_TOOLCHAIN" cargo check -p riftgate-core
 ```
 
-The wrapper reads the ignored local config and only injects `RUSTUP_TOOLCHAIN` when the current host matches the configured host values.
+### Nightly Rust (BPF source builds only)
 
-If the local Rust toolchain is missing, install it from the internal path recorded in `config/workspace.local.env`:
-
-```bash
-source config/workspace.local.env
-tar xf "$RIFTGATE_INTERNAL_RUST_BIN_TARBALL"
-sudo "${RIFTGATE_SANDBOX_TOOLCHAIN}"/install.sh
-rm -rf "${RIFTGATE_SANDBOX_TOOLCHAIN}"*
-sudo rm -rf /usr/local/lib/rustlib/src/rust
-sudo mkdir -p /usr/local/lib/rustlib/src/rust/
-sudo tar -x -C /usr/local/lib/rustlib/src/rust/ --strip-components=1 -f "$RIFTGATE_INTERNAL_RUST_SRC_TARBALL" "${RIFTGATE_SANDBOX_TOOLCHAIN%%-*}-src/library"
-sudo rm /usr/local/lib/rustlib/src/rust/library/Cargo*
-```
-
-### One-time cargo proxy setup on this VM
-
-Render `.cargo/config.toml` from the ignored local config so cargo resolves crates through the locally configured sparse proxy instead of direct crates.io.
+Install inside the Lima VM when the `--build-from-source` BPF workflow is needed:
 
 ```bash
-./scripts/render-cargo-config
+rustup toolchain install nightly --component rust-src
 ```
 
-The template is tracked at `.cargo/config.toml.example`; the real `.cargo/config.toml` stays ignored.
+`scripts/build-bpf-objects` detects the active nightly toolchain and injects `-Z build-std=core` automatically via `scripts/cargow`.
 
-### One-time apt baseline (local VM)
+### One-time apt baseline
+
+Covered automatically by Lima cloud-init provisioning. To add a package ad-hoc:
 
 ```bash
-sudo apt update
-sudo apt install -y build-essential pkg-config clang libelf-dev
+sudo apt update && sudo apt install -y <package>
 ```
-
-If a dependency is only available from Git and not mirrored through the approved proxy path, stage/copy it into the local environment before building.
 
 ## Build
 
@@ -163,10 +217,14 @@ The full pre-commit verification, in the order CI runs:
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features -- --deny warnings
-cargo test --workspace --all-features
+cargo clippy --workspace --all-targets --all-features --exclude riftgate-obs-bpf-programs -- --deny warnings
+cargo test --workspace --all-features --exclude riftgate-obs-bpf-programs
 RUSTDOCFLAGS='--deny warnings' cargo doc --workspace --no-deps --document-private-items
 ```
+
+`riftgate-obs-bpf-programs` is excluded from clippy and test because it targets `bpfel-unknown-none`
+(a no-std BPF target) which cannot be linted or tested on the host toolchain. This is a pre-existing
+v0.4 constraint. The BPF program crate is still checked via `scripts/build-bpf-objects`.
 
 Primary CI parity checks all pass locally if the four commands above pass.
 
@@ -228,7 +286,7 @@ kill -TERM "$(pgrep -f target/release/riftgate)"
 #   configured drain deadline; the process exits afterward.
 ```
 
-For an end-to-end run against a mock OpenAI backend (Docker Engine + Compose available on the current sandbox profile when required images are already present locally):
+For an end-to-end run against a mock OpenAI backend (requires Docker Engine inside the Lima VM; install with `sudo apt install docker.io` if not yet present):
 
 ```bash
 cd examples/01-basic-openai-proxy

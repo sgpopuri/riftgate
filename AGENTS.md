@@ -52,7 +52,7 @@ The durable, theory-of-the-system knowledge for each subsystem lives next to the
 | Observability | [`docs/04-design/lld-observability.md`](docs/04-design/lld-observability.md) | `crates/riftgate-obs` (bounded MPSC bus + `OtelSink` + `JsonStdoutSink` + `MultiSink`) — shipped v0.1; `TokenLevelAggregator`, `DcgmScrapeSource`, feature-gated `NvmlSource`, and `BpfSink` scaffold — landed in v0.4; Aya programs and verifier harnesses remain in flight |
 | Binary | n/a | `crates/riftgate` (tokio runtime, accept loop, hyper-rustls upstream client, SSE forwarding, `/health` + `/ready`, SIGTERM drain) — shipped v0.1 |
 | Rate limiting | [`docs/04-design/lld-rate-limiter.md`](docs/04-design/lld-rate-limiter.md) | trait in `crates/riftgate-core`; `TokenBucketLimiter` in `crates/riftgate-core` v0.2; a separate `crates/riftgate-rate-limit-*` crate emerges only if a distributed impl lands later, per [Options `021`](docs/05-options/021-rate-limiting.md) and [ADR 0009](docs/06-adrs/0009-rate-limiter-trait-in-proc-only.md) |
-| MCP capability broker | [`docs/04-design/lld-mcp-capability.md`](docs/04-design/lld-mcp-capability.md) | trait in `crates/riftgate-core`; `crates/riftgate-mcp` impl in v0.5 per [Options `026`](docs/05-options/026-mcp-orchestration.md) and [ADR 0015](docs/06-adrs/0015-mcp-extension-plane-broker.md) |
+| MCP capability broker | [`docs/04-design/lld-mcp-capability.md`](docs/04-design/lld-mcp-capability.md) | trait in `crates/riftgate-core`; `crates/riftgate-mcp` (`AllowlistBroker`, `DryRunBroker`, parser, HMAC attestation, WAL audit) — shipped v0.5 per [Options `026`](docs/05-options/026-mcp-orchestration.md) and [ADR 0015](docs/06-adrs/0015-mcp-extension-plane-broker.md) |
 
 Each LLD is the operating theory of one subsystem: architecture, dependencies, patterns, pitfalls, quality contract, agent guidance. Load the one(s) you'll touch. Do not infer them from nearby code.
 
@@ -174,51 +174,43 @@ There is exactly one live status surface in this repo: the **"Currently shipping
 
 ## 11.5 Local environment profile (current)
 
-The current implementation environment is a local Ubuntu VM with no outbound web access.
+The current implementation environment is a Lima VM (Ubuntu 24.04 LTS) running on macOS, defined in [`lima/riftgate.yaml`](lima/riftgate.yaml). Lima routes guest network through the macOS host so outbound internet access is available — `rustup`, crates.io, and `apt` all work directly with no proxy or internal tarball.
 
-- Machine-specific identifiers, internal mirror URLs, and local filesystem paths must live only in ignored local config: `config/workspace.local.env` and `.cargo/config.toml`.
+- Machine-specific identifiers and local filesystem paths must live only in ignored local config: `config/workspace.local.env` and `.cargo/config.toml`.
 - Never quote or copy the concrete values from ignored local config into tracked docs, code comments, examples, commit messages, or PR descriptions; tracked surfaces must use placeholders or generic descriptions.
 - Do not rely on any other machine for day-to-day build, test, or benchmark work unless the owner explicitly overrides this policy.
-- `sudo` + `apt` are allowed on this VM and should be the default path for system dependencies.
-- Cargo dependency resolution may require an internal sparse proxy, but its concrete URL must stay out of git and be rendered into `.cargo/config.toml` from the ignored local config.
-- If the active toolchain is configured locally, use [`scripts/cargow`](scripts/cargow) so the wrapper injects the right `RUSTUP_TOOLCHAIN` automatically.
-- If a dependency is only available from Git and not mirrored through the approved proxy path, the owner must stage/copy it into the local environment before use.
-- Docker Engine and Docker Compose are available in this environment. Docker-based example and smoke-test flows are allowed when they are the narrowest useful validation, but do not assume registry pulls or other network-dependent Docker flows succeed unless the required images have already been staged locally.
+- `sudo` + `apt` are allowed inside the VM and should be the default path for system packages.
+- Rust toolchain: installed inside the VM by the Lima provisioning script via `rustup`. The `rust-toolchain.toml` channel (stable) is picked up automatically; `scripts/cargow` injects `RUSTUP_TOOLCHAIN` when the VM hostname matches `RIFTGATE_ENV_HOST_SHORT` in `config/workspace.local.env`.
+- Cargo registry: crates.io is directly accessible from the Lima VM. Do not run `scripts/render-cargo-config` or set `RIFTGATE_CARGO_REGISTRY_*` variables for the Lima profile.
+- Docker Engine is available inside the VM via `sudo apt install docker.io`. Docker-based example and smoke-test flows work; image pulls succeed because the VM has internet access.
 
-Bootstrap the local config by copying `config/workspace.local.env.example` to `config/workspace.local.env` and filling in the host, toolchain, mirror, and internal tarball locations. Render `.cargo/config.toml` with `./scripts/render-cargo-config` after updating the local config.
-
-Canonical Rust install flow in this local environment (when the configured toolchain is missing):
+Bootstrap:
 
 ```bash
-tar xf "$RIFTGATE_INTERNAL_RUST_BIN_TARBALL"
-sudo "$RIFTGATE_ENV_TOOLCHAIN"/install.sh
-rm -rf "$RIFTGATE_ENV_TOOLCHAIN"*
-sudo rm -rf /usr/local/lib/rustlib/src/rust
-sudo mkdir -p /usr/local/lib/rustlib/src/rust/
-sudo tar -x -C /usr/local/lib/rustlib/src/rust/ --strip-components=1 -f "$RIFTGATE_INTERNAL_RUST_SRC_TARBALL" "${RIFTGATE_ENV_TOOLCHAIN%%-*}-src/library"
-sudo rm /usr/local/lib/rustlib/src/rust/library/Cargo*
+# macOS — one-time
+brew install lima
+limactl start lima/riftgate.yaml          # provisions Rust stable + apt packages (~5-10 min first boot)
+
+# Inside the VM — once after first start
+cp config/workspace.local.env.example config/workspace.local.env
+# Set RIFTGATE_ENV_HOST_SHORT=lima-riftgate  RIFTGATE_ENV_TOOLCHAIN=stable
+./scripts/cargow check --workspace --all-targets
 ```
 
-Local cargo proxy config template:
+VS Code Remote-SSH (run once on macOS after the VM is started):
 
-```toml
-[registries.crates-io]
-index = "<internal sparse index url>"
-
-[source.crates-io]
-replace-with = "<internal registry name>"
-
-[registry]
-default = "<internal registry name>"
-
-[registries.<internal registry name>]
-index = "<internal sparse index url>"
-
-[source.<internal registry name>]
-registry = "<internal sparse index url>"
+```bash
+limactl show-ssh --format config riftgate >> ~/.ssh/config
+# VS Code -> Remote-SSH -> Connect to Host -> lima-riftgate
 ```
 
-If this profile changes (host class, mirror requirements, Docker availability), update this section and the "Currently shipping" block in `docs/02-mvp-roadmap.md` in the same change. Never commit the concrete local values.
+BPF source builds require a nightly toolchain with `rust-src`. Install inside the VM when needed:
+
+```bash
+rustup toolchain install nightly --component rust-src
+```
+
+If this profile changes (host class, network policy, Docker availability), update this section and the "Currently shipping" block in `docs/02-mvp-roadmap.md` in the same change. Never commit concrete local values.
 
 ### Code (when Rust lands)
 

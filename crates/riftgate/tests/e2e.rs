@@ -185,6 +185,7 @@ async fn spawn_riftgate(
         upstream: upstream_client,
         publisher,
         drain: drain_rx.clone(),
+        mcp_broker: None,
     };
 
     let listener = server::bind(config.server.listen_addr)
