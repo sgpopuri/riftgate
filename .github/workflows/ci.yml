@@ -45,7 +45,11 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --all-targets --all-features --exclude riftgate-obs-bpf-programs -- --deny warnings
+      # Workspace crates (all features, excluding BPF no-std crate and
+      # riftgate-operator which pulls in kube/k8s-openapi optional deps).
+      - run: cargo clippy --workspace --all-targets --all-features --exclude riftgate-obs-bpf-programs --exclude riftgate-operator -- --deny warnings
+      # Operator crate (default features only; kube deps require a live cluster).
+      - run: cargo clippy -p riftgate-operator -- --deny warnings
 
   test:
     name: cargo test
@@ -58,7 +62,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace --all-features --exclude riftgate-obs-bpf-programs
+      # Workspace crates (all features, excluding BPF and kube-dependent operator).
+      - run: cargo test --workspace --all-features --exclude riftgate-obs-bpf-programs --exclude riftgate-operator
+      # Operator crate (default features; stub tests always pass without kube).
+      - run: cargo test -p riftgate-operator
 
   doc:
     name: cargo doc
@@ -69,7 +76,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - env:
           RUSTDOCFLAGS: --deny warnings
-        run: cargo doc --workspace --no-deps --document-private-items
+        run: cargo doc --workspace --no-deps --document-private-items --exclude riftgate-obs-bpf-programs --exclude riftgate-operator
 
   audit:
     name: cargo deny
