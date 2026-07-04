@@ -18,6 +18,9 @@ toml      = { workspace = true }
 arc-swap  = { workspace = true }
 thiserror = { workspace = true }
 tracing   = { workspace = true }
+sha2      = { workspace = true }
+http      = { workspace = true }
+riftgate-core = { path = "../riftgate-core" }
 
 [dev-dependencies]
 tempfile   = { workspace = true }

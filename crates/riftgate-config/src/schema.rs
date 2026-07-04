@@ -10,6 +10,7 @@
 
 use crate::secret::Secret;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 
 /// Top-level configuration root.
@@ -39,6 +40,10 @@ pub struct Config {
     /// [ADR 0015](../../../docs/06-adrs/0015-mcp-extension-plane-broker.md)).
     #[serde(default)]
     pub mcp: McpConfig,
+    /// Multitenancy and per-request tenant identity resolution (v1.0,
+    /// [ADR 0029](../../../docs/06-adrs/0029-api-key-tenant-resolver.md)).
+    #[serde(default)]
+    pub multitenancy: MultitenancyConfig,
 }
 
 /// HTTP server configuration.
@@ -279,4 +284,155 @@ pub struct McpTimeBoundedGrant {
     pub tool: String,
     /// Grant expires when `now >= UNIX_EPOCH + until_unix_secs`.
     pub until_unix_secs: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Multitenancy config (v1.0, ADR 0029)
+// ---------------------------------------------------------------------------
+
+/// Multitenancy and per-request tenant identity resolution.
+///
+/// ```toml
+/// [multitenancy]
+/// mode = "api-key"        # "api-key" (default) or "trusted-header"
+///
+/// # API keys stored as SHA-256 hex of the raw Bearer token.
+/// # Value is the tenant name (resolved to a TenantId via FNV-1a or numeric parse).
+/// [multitenancy.api_keys]
+/// "sha256:<64 hex chars>" = "acme"
+/// "sha256:<64 hex chars>" = "bigcorp"
+/// ```
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct MultitenancyConfig {
+    /// Resolution mode: `"api-key"` (default) or `"trusted-header"`.
+    ///
+    /// - `"api-key"`: reads `Authorization: Bearer <key>`, computes SHA-256,
+    ///   looks up in `api_keys`. Recommended for internet-facing deployments.
+    /// - `"trusted-header"`: reads `x-riftgate-tenant` directly. Only safe
+    ///   on trusted internal networks (service mesh, local dev).
+    #[serde(default = "default_multitenancy_mode")]
+    pub mode: String,
+    /// API key registry: maps `"sha256:<hex>"` to tenant name.
+    /// Only used when `mode = "api-key"`.
+    #[serde(default)]
+    pub api_keys: HashMap<String, String>,
+}
+
+fn default_multitenancy_mode() -> String {
+    "api-key".to_owned()
+}
+
+/// API key resolver: maps `Authorization: Bearer <key>` to a `TenantIdentity`.
+///
+/// Keys are stored as `"sha256:<64 hex chars>"` in config; the gateway
+/// computes SHA-256 of the incoming bearer token and performs an O(1) lookup.
+pub struct ApiKeyTenantResolver {
+    /// Pre-built map: SHA-256 hex of raw key -> (TenantId, principal string).
+    registry: HashMap<String, (riftgate_core::types::TenantId, String)>,
+}
+
+impl ApiKeyTenantResolver {
+    /// Construct from the `[multitenancy.api_keys]` config table.
+    ///
+    /// Keys in config are expected to be `"sha256:<64 hex chars>"`.
+    /// Values are tenant names (resolved to `TenantId` via FNV-1a or numeric parse).
+    pub fn from_config(cfg: &MultitenancyConfig) -> Self {
+        use riftgate_core::tenant::tenant_id_from_str;
+        use riftgate_core::types::TenantId;
+        let registry = cfg
+            .api_keys
+            .iter()
+            .map(|(k, name)| {
+                let id = TenantId(tenant_id_from_str(name));
+                (k.clone(), (id, name.clone()))
+            })
+            .collect();
+        Self { registry }
+    }
+
+    /// SHA-256 hex of `raw_key` in the form `"sha256:<hex>"`.
+    fn hash_key(raw_key: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let digest = Sha256::digest(raw_key.as_bytes());
+        let hex: String = digest.iter().fold(String::new(), |mut s, b| {
+            use std::fmt::Write;
+            let _ = write!(s, "{b:02x}");
+            s
+        });
+        format!("sha256:{hex}")
+    }
+}
+
+impl riftgate_core::tenant::TenantResolver for ApiKeyTenantResolver {
+    fn resolve(
+        &self,
+        headers: &http::HeaderMap,
+    ) -> Option<riftgate_core::capability::TenantIdentity> {
+        let auth = headers.get(http::header::AUTHORIZATION)?.to_str().ok()?;
+        let raw_key = auth.strip_prefix("Bearer ")?;
+        let hashed = Self::hash_key(raw_key);
+        let (id, principal) = self.registry.get(&hashed)?;
+        Some(riftgate_core::capability::TenantIdentity {
+            tenant: *id,
+            principal: principal.clone(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tenant_resolver_tests {
+    use super::*;
+    use http::{HeaderMap, HeaderValue};
+    use riftgate_core::tenant::TenantResolver;
+
+    fn make_cfg(key_hex: &str, tenant_name: &str) -> MultitenancyConfig {
+        let mut cfg = MultitenancyConfig::default();
+        cfg.api_keys
+            .insert(format!("sha256:{key_hex}"), tenant_name.to_owned());
+        cfg
+    }
+
+    #[test]
+    fn api_key_resolver_accepts_valid_key() {
+        // Build a resolver with a known key.
+        let raw_key = "test-api-key-acme";
+        let expected_hex = {
+            use sha2::{Digest, Sha256};
+            let d = Sha256::digest(raw_key.as_bytes());
+            d.iter().fold(String::new(), |mut s, b| {
+                use std::fmt::Write;
+                let _ = write!(s, "{b:02x}");
+                s
+            })
+        };
+        let cfg = make_cfg(&expected_hex, "acme");
+        let resolver = ApiKeyTenantResolver::from_config(&cfg);
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {raw_key}")).unwrap(),
+        );
+        let identity = resolver.resolve(&headers).expect("should resolve");
+        assert_eq!(identity.principal, "acme");
+    }
+
+    #[test]
+    fn api_key_resolver_rejects_unknown_key() {
+        let cfg = MultitenancyConfig::default();
+        let resolver = ApiKeyTenantResolver::from_config(&cfg);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer unknown-key"),
+        );
+        assert!(resolver.resolve(&headers).is_none());
+    }
+
+    #[test]
+    fn api_key_resolver_rejects_missing_auth_header() {
+        let cfg = MultitenancyConfig::default();
+        let resolver = ApiKeyTenantResolver::from_config(&cfg);
+        assert!(resolver.resolve(&HeaderMap::new()).is_none());
+    }
 }

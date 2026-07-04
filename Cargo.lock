@@ -2081,8 +2081,11 @@ name = "riftgate-config"
 version = "0.1.0-dev"
 dependencies = [
  "arc-swap",
+ "http",
+ "riftgate-core",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "toml",
@@ -2096,6 +2099,7 @@ dependencies = [
  "bumpalo",
  "criterion",
  "dashmap",
+ "http",
  "proptest",
  "thiserror 2.0.18",
  "tokio",

@@ -41,8 +41,8 @@ mod validate;
 pub use error::ConfigError;
 pub use loader::{Env, load};
 pub use schema::{
-    BackendConfig, Config, LogConfig, LogFormat, McpConfig, McpTenantConfig,
-    McpTimeBoundedGrant, ObsConfig, ServerConfig, TimerConfig,
+    ApiKeyTenantResolver, BackendConfig, Config, LogConfig, LogFormat, McpConfig, McpTenantConfig,
+    McpTimeBoundedGrant, MultitenancyConfig, ObsConfig, ServerConfig, TimerConfig,
 };
 pub use secret::Secret;
 pub use validate::validate;

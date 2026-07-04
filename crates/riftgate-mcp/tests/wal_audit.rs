@@ -76,7 +76,11 @@ fn every_authorize_call_writes_one_audit_record() {
     }
 
     let records = wal.0.lock().unwrap();
-    assert_eq!(records.len(), requests.len(), "expected one WAL record per authorize() call");
+    assert_eq!(
+        records.len(),
+        requests.len(),
+        "expected one WAL record per authorize() call"
+    );
 }
 
 #[test]
@@ -98,10 +102,8 @@ fn audit_records_are_valid_ndjson_with_correct_decisions() {
     broker.authorize(&deny_req, &id);
 
     let records = wal.0.lock().unwrap();
-    let first: serde_json::Value =
-        serde_json::from_slice(records[0].trim_ascii_end()).unwrap();
-    let second: serde_json::Value =
-        serde_json::from_slice(records[1].trim_ascii_end()).unwrap();
+    let first: serde_json::Value = serde_json::from_slice(records[0].trim_ascii_end()).unwrap();
+    let second: serde_json::Value = serde_json::from_slice(records[1].trim_ascii_end()).unwrap();
 
     assert_eq!(first["decision"], "allow");
     assert_eq!(first["subject"], "search-web");

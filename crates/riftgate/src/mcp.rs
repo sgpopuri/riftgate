@@ -89,7 +89,10 @@ pub fn build_mcp_broker(config: &Config) -> Option<Arc<dyn CapabilityBroker>> {
         .collect();
 
     let mode = if mcp.enforce { "enforce" } else { "dry-run" };
-    info!(tenants = tenant_configs.len(), mode, "MCP capability broker enabled");
+    info!(
+        tenants = tenant_configs.len(),
+        mode, "MCP capability broker enabled"
+    );
 
     let inner = AllowlistBroker::new(&tenant_configs, signing_key, wal);
     Some(if mcp.enforce {
@@ -120,7 +123,10 @@ fn tenant_id_from_key(key: &str) -> u32 {
 fn parse_hex_key(hex: &str) -> [u8; 32] {
     let hex = hex.trim();
     if hex.len() != 64 {
-        warn!(len = hex.len(), "mcp.signing_key_hex must be 64 hex chars; using zero key");
+        warn!(
+            len = hex.len(),
+            "mcp.signing_key_hex must be 64 hex chars; using zero key"
+        );
         return [0u8; 32];
     }
     let mut key = [0u8; 32];

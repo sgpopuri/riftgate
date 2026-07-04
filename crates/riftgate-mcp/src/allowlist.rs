@@ -15,15 +15,15 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use riftgate_core::capability::{
-    AuditDecision, CapabilityBroker, CapabilityDecision, DenialReason,
-    LifecycleMethod, McpAuditEvent, McpRequest, TenantIdentity,
+    AuditDecision, CapabilityBroker, CapabilityDecision, DenialReason, LifecycleMethod,
+    McpAuditEvent, McpRequest, TenantIdentity,
 };
 use riftgate_core::types::RequestId;
 use riftgate_core::wal::WAL;
 use serde::Deserialize;
 use tracing::warn;
 
-use crate::attestation::{sign, SigningKey};
+use crate::attestation::{SigningKey, sign};
 use crate::audit;
 
 // ---------------------------------------------------------------------------
@@ -93,8 +93,7 @@ impl CompiledAllowlist {
             .time_bounded_grants
             .iter()
             .map(|g| {
-                let expiry =
-                    SystemTime::UNIX_EPOCH + Duration::from_secs(g.until_unix_secs);
+                let expiry = SystemTime::UNIX_EPOCH + Duration::from_secs(g.until_unix_secs);
                 (expiry, g.tool.clone())
             })
             .collect();
@@ -136,10 +135,11 @@ impl CompiledAllowlist {
         if self.resource_prefixes.is_empty() {
             return false;
         }
-        let pos = self.resource_prefixes.partition_point(|p| p.as_str() <= uri);
+        let pos = self
+            .resource_prefixes
+            .partition_point(|p| p.as_str() <= uri);
         (pos > 0 && uri.starts_with(&self.resource_prefixes[pos - 1]))
-            || (pos < self.resource_prefixes.len()
-                && uri.starts_with(&self.resource_prefixes[pos]))
+            || (pos < self.resource_prefixes.len() && uri.starts_with(&self.resource_prefixes[pos]))
     }
 
     // Binary-search past expired grants, then scan active ones for a name match.
@@ -181,16 +181,16 @@ impl AllowlistBroker {
             .iter()
             .map(|(&tid, cfg)| (tid, CompiledAllowlist::from_config(cfg)))
             .collect();
-        Self { tenants, signing_key, wal }
+        Self {
+            tenants,
+            signing_key,
+            wal,
+        }
     }
 }
 
 impl CapabilityBroker for AllowlistBroker {
-    fn authorize(
-        &self,
-        request: &McpRequest,
-        identity: &TenantIdentity,
-    ) -> CapabilityDecision {
+    fn authorize(&self, request: &McpRequest, identity: &TenantIdentity) -> CapabilityDecision {
         let now = SystemTime::now();
 
         let allowlist = match self.tenants.get(&identity.tenant.0) {
@@ -292,7 +292,11 @@ mod tests {
 
     struct NoopWal;
     impl WAL for NoopWal {
-        fn append(&self, _: &[u8], _: riftgate_core::wal::Durability) -> std::io::Result<WalEntryId> {
+        fn append(
+            &self,
+            _: &[u8],
+            _: riftgate_core::wal::Durability,
+        ) -> std::io::Result<WalEntryId> {
             Ok(WalEntryId(0))
         }
         fn flush(&self, _: Duration) -> std::io::Result<()> {
@@ -308,32 +312,44 @@ mod tests {
     }
 
     fn identity(tid: u32) -> TenantIdentity {
-        TenantIdentity { tenant: TenantId(tid), principal: "test".to_owned() }
+        TenantIdentity {
+            tenant: TenantId(tid),
+            principal: "test".to_owned(),
+        }
     }
 
     #[test]
     fn allowed_tool_returns_allow() {
         let mut cfg = HashMap::new();
-        cfg.insert(1, TenantAllowlist {
-            allowed_tools: vec!["search-web".to_owned()],
-            ..Default::default()
-        });
+        cfg.insert(
+            1,
+            TenantAllowlist {
+                allowed_tools: vec!["search-web".to_owned()],
+                ..Default::default()
+            },
+        );
         let b = broker(cfg);
         let req = McpRequest::ToolCall {
             tool: ToolId::from("search-web"),
             argument_hash: [0u8; 32],
         };
-        assert!(matches!(b.authorize(&req, &identity(1)), CapabilityDecision::Allow { .. }));
+        assert!(matches!(
+            b.authorize(&req, &identity(1)),
+            CapabilityDecision::Allow { .. }
+        ));
     }
 
     #[test]
     fn denied_tool_returns_deny() {
         let mut cfg = HashMap::new();
-        cfg.insert(1, TenantAllowlist {
-            allowed_tools: vec!["search-web".to_owned()],
-            denied_tools: vec!["filesystem-write".to_owned()],
-            ..Default::default()
-        });
+        cfg.insert(
+            1,
+            TenantAllowlist {
+                allowed_tools: vec!["search-web".to_owned()],
+                denied_tools: vec!["filesystem-write".to_owned()],
+                ..Default::default()
+            },
+        );
         let b = broker(cfg);
         let req = McpRequest::ToolCall {
             tool: ToolId::from("filesystem-write"),
@@ -341,14 +357,21 @@ mod tests {
         };
         assert!(matches!(
             b.authorize(&req, &identity(1)),
-            CapabilityDecision::Deny { reason: DenialReason::InDenylist }
+            CapabilityDecision::Deny {
+                reason: DenialReason::InDenylist
+            }
         ));
     }
 
     #[test]
     fn tool_not_in_allowlist_returns_deny() {
         let mut cfg = HashMap::new();
-        cfg.insert(1, TenantAllowlist { ..Default::default() });
+        cfg.insert(
+            1,
+            TenantAllowlist {
+                ..Default::default()
+            },
+        );
         let b = broker(cfg);
         let req = McpRequest::ToolCall {
             tool: ToolId::from("unknown-tool"),
@@ -356,7 +379,9 @@ mod tests {
         };
         assert!(matches!(
             b.authorize(&req, &identity(1)),
-            CapabilityDecision::Deny { reason: DenialReason::NotInAllowlist }
+            CapabilityDecision::Deny {
+                reason: DenialReason::NotInAllowlist
+            }
         ));
     }
 
@@ -366,38 +391,51 @@ mod tests {
         let req = McpRequest::ToolList;
         assert!(matches!(
             b.authorize(&req, &identity(99)),
-            CapabilityDecision::Deny { reason: DenialReason::TenantUnknown }
+            CapabilityDecision::Deny {
+                reason: DenialReason::TenantUnknown
+            }
         ));
     }
 
     #[test]
     fn resource_prefix_match_allows() {
         let mut cfg = HashMap::new();
-        cfg.insert(1, TenantAllowlist {
-            allowed_resource_prefixes: vec!["s3://acme-datasets/*".to_owned()],
-            ..Default::default()
-        });
+        cfg.insert(
+            1,
+            TenantAllowlist {
+                allowed_resource_prefixes: vec!["s3://acme-datasets/*".to_owned()],
+                ..Default::default()
+            },
+        );
         let b = broker(cfg);
         let req = McpRequest::ResourceRead {
             resource: riftgate_core::capability::ResourceId::from("s3://acme-datasets/train.jsonl"),
         };
-        assert!(matches!(b.authorize(&req, &identity(1)), CapabilityDecision::Allow { .. }));
+        assert!(matches!(
+            b.authorize(&req, &identity(1)),
+            CapabilityDecision::Allow { .. }
+        ));
     }
 
     #[test]
     fn resource_outside_prefix_denies() {
         let mut cfg = HashMap::new();
-        cfg.insert(1, TenantAllowlist {
-            allowed_resource_prefixes: vec!["s3://acme-datasets/*".to_owned()],
-            ..Default::default()
-        });
+        cfg.insert(
+            1,
+            TenantAllowlist {
+                allowed_resource_prefixes: vec!["s3://acme-datasets/*".to_owned()],
+                ..Default::default()
+            },
+        );
         let b = broker(cfg);
         let req = McpRequest::ResourceRead {
             resource: riftgate_core::capability::ResourceId::from("s3://other-bucket/data"),
         };
         assert!(matches!(
             b.authorize(&req, &identity(1)),
-            CapabilityDecision::Deny { reason: DenialReason::NotInAllowlist }
+            CapabilityDecision::Deny {
+                reason: DenialReason::NotInAllowlist
+            }
         ));
     }
 
@@ -409,32 +447,16 @@ mod tests {
             .as_secs()
             + 86400;
         let mut cfg = HashMap::new();
-        cfg.insert(1, TenantAllowlist {
-            time_bounded_grants: vec![TimeBoundedGrant {
-                tool: "send-email".to_owned(),
-                until_unix_secs: far_future,
-            }],
-            ..Default::default()
-        });
-        let b = broker(cfg);
-        let req = McpRequest::ToolCall {
-            tool: ToolId::from("send-email"),
-            argument_hash: [0u8; 32],
-        };
-        assert!(matches!(b.authorize(&req, &identity(1)), CapabilityDecision::Allow { .. }));
-    }
-
-    #[test]
-    fn expired_time_bounded_grant_denies() {
-        let past = 1_000u64; // well in the past
-        let mut cfg = HashMap::new();
-        cfg.insert(1, TenantAllowlist {
-            time_bounded_grants: vec![TimeBoundedGrant {
-                tool: "send-email".to_owned(),
-                until_unix_secs: past,
-            }],
-            ..Default::default()
-        });
+        cfg.insert(
+            1,
+            TenantAllowlist {
+                time_bounded_grants: vec![TimeBoundedGrant {
+                    tool: "send-email".to_owned(),
+                    until_unix_secs: far_future,
+                }],
+                ..Default::default()
+            },
+        );
         let b = broker(cfg);
         let req = McpRequest::ToolCall {
             tool: ToolId::from("send-email"),
@@ -442,22 +464,58 @@ mod tests {
         };
         assert!(matches!(
             b.authorize(&req, &identity(1)),
-            CapabilityDecision::Deny { reason: DenialReason::NotInAllowlist }
+            CapabilityDecision::Allow { .. }
+        ));
+    }
+
+    #[test]
+    fn expired_time_bounded_grant_denies() {
+        let past = 1_000u64; // well in the past
+        let mut cfg = HashMap::new();
+        cfg.insert(
+            1,
+            TenantAllowlist {
+                time_bounded_grants: vec![TimeBoundedGrant {
+                    tool: "send-email".to_owned(),
+                    until_unix_secs: past,
+                }],
+                ..Default::default()
+            },
+        );
+        let b = broker(cfg);
+        let req = McpRequest::ToolCall {
+            tool: ToolId::from("send-email"),
+            argument_hash: [0u8; 32],
+        };
+        assert!(matches!(
+            b.authorize(&req, &identity(1)),
+            CapabilityDecision::Deny {
+                reason: DenialReason::NotInAllowlist
+            }
         ));
     }
 
     #[test]
     fn lifecycle_and_list_requests_always_pass() {
         let mut cfg = HashMap::new();
-        cfg.insert(1, TenantAllowlist { ..Default::default() });
+        cfg.insert(
+            1,
+            TenantAllowlist {
+                ..Default::default()
+            },
+        );
         let b = broker(cfg);
         let id = identity(1);
         for req in [
             McpRequest::ToolList,
             McpRequest::ResourceList,
             McpRequest::PromptList,
-            McpRequest::Lifecycle { method: LifecycleMethod::Initialize },
-            McpRequest::Lifecycle { method: LifecycleMethod::Ping },
+            McpRequest::Lifecycle {
+                method: LifecycleMethod::Initialize,
+            },
+            McpRequest::Lifecycle {
+                method: LifecycleMethod::Ping,
+            },
         ] {
             assert!(
                 matches!(b.authorize(&req, &id), CapabilityDecision::Allow { .. }),

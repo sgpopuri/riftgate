@@ -39,4 +39,4 @@ pub mod parser;
 pub use allowlist::{AllowlistBroker, TenantAllowlist, TimeBoundedGrant};
 pub use attestation::SigningKey;
 pub use dryrun::DryRunBroker;
-pub use parser::{parse, ParseError};
+pub use parser::{ParseError, parse};

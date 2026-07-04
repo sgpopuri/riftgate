@@ -237,9 +237,5 @@ pub trait CapabilityBroker: Send + Sync {
     ///
     /// Returns `Allow { attestation }` if the request should proceed, or
     /// `Deny { reason }` if it should be rejected with a `403`.
-    fn authorize(
-        &self,
-        request: &McpRequest,
-        identity: &TenantIdentity,
-    ) -> CapabilityDecision;
+    fn authorize(&self, request: &McpRequest, identity: &TenantIdentity) -> CapabilityDecision;
 }

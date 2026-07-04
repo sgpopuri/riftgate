@@ -102,6 +102,7 @@ pub mod rate_limit;
 pub mod request;
 pub mod router;
 pub mod scheduler;
+pub mod tenant;
 pub mod timers;
 pub mod types;
 pub mod wal;

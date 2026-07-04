@@ -87,7 +87,7 @@ check_rust_toolchain() {
     warn "unable to read rustc -vV output"
   fi
 
-  if [[ "$rustc_vv" == *"release: nightly"* ]]; then
+  if [[ "$rustc_vv" == *"nightly"* ]]; then
     pass "nightly toolchain active"
   else
     fail "non-nightly toolchain active (build-std=core for bpfel requires nightly cargo/rustc)"

@@ -35,8 +35,7 @@ impl std::fmt::Debug for SigningKey {
 /// The message signed is `tenant_id_le || "|" || subject || "|" || decision`.
 /// The `decision` is always `"allow"` for non-dry-run attestations.
 pub fn sign(caller: TenantId, subject: &str, key: &SigningKey) -> AttestationHeaders {
-    let mut mac =
-        HmacSha256::new_from_slice(&key.0).expect("HMAC accepts keys of any length");
+    let mut mac = HmacSha256::new_from_slice(&key.0).expect("HMAC accepts keys of any length");
     mac.update(&caller.0.to_le_bytes());
     mac.update(b"|");
     mac.update(subject.as_bytes());
@@ -55,8 +54,7 @@ pub fn sign(caller: TenantId, subject: &str, key: &SigningKey) -> AttestationHea
 /// Returns `true` if the signature is valid. Used in downstream server
 /// harnesses and integration tests; not called on the hot path.
 pub fn verify(headers: &AttestationHeaders, key: &SigningKey) -> bool {
-    let mut mac =
-        HmacSha256::new_from_slice(&key.0).expect("HMAC accepts keys of any length");
+    let mut mac = HmacSha256::new_from_slice(&key.0).expect("HMAC accepts keys of any length");
     mac.update(&headers.caller.0.to_le_bytes());
     mac.update(b"|");
     mac.update(headers.subject.as_bytes());

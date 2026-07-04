@@ -44,7 +44,10 @@ check_only=0
 build_from_source=0
 
 nightly_active=0
-if "${repo_root}/scripts/cargow" rustc -vV 2>/dev/null | grep -q '^release: nightly'; then
+# Detect nightly independently of scripts/cargow: cargow may inject a stable
+# toolchain override from config/workspace.local.env, which would hide an
+# installed nightly. Use rustup toolchain list to check availability directly.
+if rustup toolchain list 2>/dev/null | grep -q 'nightly'; then
   nightly_active=1
 fi
 
@@ -107,22 +110,48 @@ if [[ "$mode" == "real" ]]; then
     fi
 
     target_triple="bpfel-unknown-none"
-    build_cmd=("${repo_root}/scripts/cargow" build --target "$target_triple" -p riftgate-obs-bpf-programs --features bpf-programs)
     if [[ "$nightly_active" == "1" ]]; then
-      build_cmd+=( -Z build-std=core )
+      # Use nightly cargo directly (bypasses cargow's stable toolchain override).
+      build_cmd=(env RUSTUP_TOOLCHAIN=nightly cargo build
+        --target "$target_triple"
+        -p riftgate-obs-bpf-programs
+        --features bpf-programs
+        -Z build-std=core
+      )
+    else
+      build_cmd=("${repo_root}/scripts/cargow" build --target "$target_triple" -p riftgate-obs-bpf-programs --features bpf-programs)
     fi
 
     if ! "${build_cmd[@]}"; then
       echo "error: failed to build BPF objects from source for target $target_triple" >&2
       if [[ "$nightly_active" != "1" ]]; then
         echo "hint: active toolchain is not nightly; bpfel source build requires nightly with -Z build-std=core" >&2
+        echo "hint: install with: rustup toolchain install nightly --component rust-src" >&2
       fi
-      echo "hint: ensure rust-src is installed at /usr/local/lib/rustlib/src/rust/library/core" >&2
+      echo "hint: rust-src for the nightly toolchain is expected in:" >&2
+      echo "  \$(rustup toolchain list | grep nightly | head -1 | awk '{print \$1}')" >&2
+      echo "  e.g. ~/.rustup/toolchains/nightly-<triple>/lib/rustlib/src/rust" >&2
       echo "hint: alternatively use --mode real --from <build-output-dir> with externally built EM_BPF objects" >&2
       exit 1
     fi
 
     from_dir="${repo_root}/target/${target_triple}/debug"
+
+    # Aya produces extensionless binaries (e.g. `cpu_sample`); the staging
+    # contract requires `.bpf.o` suffixes. Create a temp dir with renamed copies.
+    staging_tmp="${repo_root}/target/tmp/bpf-stage"
+    mkdir -p "$staging_tmp"
+    for slot in cpu_sample syscall_stall tcp_retransmit; do
+      src="${from_dir}/${slot}"
+      dst="${staging_tmp}/${slot}.bpf.o"
+      if [[ -f "$src" ]]; then
+        cp "$src" "$dst"
+      else
+        echo "error: expected build output not found: $src" >&2
+        exit 1
+      fi
+    done
+    from_dir="$staging_tmp"
   elif [[ -z "$from_dir" ]]; then
     echo "error: --mode real requires --from <build-output-dir> or --build-from-source" >&2
     exit 2

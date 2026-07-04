@@ -31,11 +31,7 @@ impl<B: CapabilityBroker> DryRunBroker<B> {
 }
 
 impl<B: CapabilityBroker> CapabilityBroker for DryRunBroker<B> {
-    fn authorize(
-        &self,
-        request: &McpRequest,
-        identity: &TenantIdentity,
-    ) -> CapabilityDecision {
+    fn authorize(&self, request: &McpRequest, identity: &TenantIdentity) -> CapabilityDecision {
         let inner_decision = self.inner.authorize(request, identity);
 
         match inner_decision {
@@ -83,15 +79,15 @@ fn request_subject(request: &McpRequest) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use riftgate_core::capability::{
-        CapabilityDecision, DenialReason,
-    };
+    use riftgate_core::capability::{CapabilityDecision, DenialReason};
     use riftgate_core::types::TenantId;
 
     struct AlwaysDeny;
     impl CapabilityBroker for AlwaysDeny {
         fn authorize(&self, _: &McpRequest, _: &TenantIdentity) -> CapabilityDecision {
-            CapabilityDecision::Deny { reason: DenialReason::NotInAllowlist }
+            CapabilityDecision::Deny {
+                reason: DenialReason::NotInAllowlist,
+            }
         }
     }
 
@@ -110,14 +106,20 @@ mod tests {
     }
 
     fn identity() -> TenantIdentity {
-        TenantIdentity { tenant: TenantId(1), principal: "test".to_owned() }
+        TenantIdentity {
+            tenant: TenantId(1),
+            principal: "test".to_owned(),
+        }
     }
 
     #[test]
     fn deny_is_overridden_to_allow() {
         let b = DryRunBroker::new(AlwaysDeny);
         let req = McpRequest::ToolList;
-        assert!(matches!(b.authorize(&req, &identity()), CapabilityDecision::Allow { .. }));
+        assert!(matches!(
+            b.authorize(&req, &identity()),
+            CapabilityDecision::Allow { .. }
+        ));
     }
 
     #[test]

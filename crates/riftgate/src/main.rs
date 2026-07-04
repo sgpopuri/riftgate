@@ -14,9 +14,10 @@ use riftgate::error::RiftgateError;
 use riftgate::mcp;
 use riftgate::signals;
 use riftgate::{bootstrap, proxy, server, shutdown, upstream};
-use riftgate_config::{Env, load};
+use riftgate_config::{Env, MultitenancyConfig, load};
 use riftgate_core::GpuPressureSource;
 use riftgate_core::router::{BackendId, BackendPool, BackendSignals};
+use riftgate_core::tenant::{HeaderTenantResolver, TenantResolver};
 use riftgate_obs::DcgmScrapeSource;
 use riftgate_router::{
     CircuitBreakerArbiter, CircuitBreakerConfig, HedgedConfig, HedgedRouter, KvAwareConfig,
@@ -171,6 +172,7 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
     }
 
     let mcp_broker = mcp::build_mcp_broker(&config);
+    let tenant_resolver = build_tenant_resolver(&config.multitenancy);
     let state = proxy::HandlerState {
         config: Arc::new(config),
         router,
@@ -180,6 +182,7 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
         publisher,
         drain: drain_rx.clone(),
         mcp_broker,
+        tenant_resolver,
     };
     let drain_grace = Duration::from_millis(cli.drain_grace_ms);
     let accepted = server::accept_loop(listener, state, drain_rx, drain_grace).await?;
@@ -195,4 +198,31 @@ async fn run(cli: Cli) -> Result<(), RiftgateError> {
     drop(bus);
 
     Ok(())
+}
+
+/// Build a [`TenantResolver`] from the `[multitenancy]` config section (ADR 0029).
+fn build_tenant_resolver(cfg: &MultitenancyConfig) -> Arc<dyn TenantResolver> {
+    match cfg.mode.as_str() {
+        "trusted-header" => {
+            tracing::info!(
+                "tenant resolver: trusted-header mode (x-riftgate-tenant header; not safe on internet-facing deployments)"
+            );
+            Arc::new(HeaderTenantResolver) as Arc<dyn TenantResolver>
+        }
+        _ => {
+            // Default: api-key mode.
+            use riftgate_config::ApiKeyTenantResolver;
+            if cfg.api_keys.is_empty() {
+                tracing::info!(
+                    "tenant resolver: api-key mode with empty registry; \
+                     all requests resolve to TenantId(0) — add [multitenancy.api_keys] to config"
+                );
+                // Empty registry: fall back to header mode so requests proceed.
+                Arc::new(HeaderTenantResolver) as Arc<dyn TenantResolver>
+            } else {
+                tracing::info!(keys = cfg.api_keys.len(), "tenant resolver: api-key mode");
+                Arc::new(ApiKeyTenantResolver::from_config(cfg)) as Arc<dyn TenantResolver>
+            }
+        }
+    }
 }

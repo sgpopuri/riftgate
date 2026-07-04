@@ -95,6 +95,7 @@ async fn spawn_gateway(upstream: SocketAddr) -> SocketAddr {
         publisher,
         drain: drain_rx.clone(),
         mcp_broker: None,
+        tenant_resolver: std::sync::Arc::new(riftgate_core::tenant::HeaderTenantResolver),
     };
 
     let listener = server::bind(config.server.listen_addr).await.unwrap();

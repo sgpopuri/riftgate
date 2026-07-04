@@ -103,8 +103,8 @@ for slot in cpu_sample syscall_stall tcp_retransmit; do
     machine="$(readelf -h "$src" | sed -n 's/^  Machine:[[:space:]]*//p' | head -n1)"
     echo "checked: $src (type='$elf_type', machine='$machine')"
 
-    if [[ "$machine" != "BPF" ]]; then
-      echo "error: invalid ELF machine for $src (got '$machine', want 'BPF')" >&2
+    if [[ "$machine" != "BPF" && "$machine" != "Linux BPF" ]]; then
+      echo "error: invalid ELF machine for $src (got '$machine', want 'BPF' or 'Linux BPF')" >&2
       exit 1
     fi
   fi

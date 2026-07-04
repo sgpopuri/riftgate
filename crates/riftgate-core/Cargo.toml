@@ -38,6 +38,9 @@ tracing  = { workspace = true }
 tokio       = { workspace = true }
 tokio-util  = { workspace = true }
 
+# HTTP types needed by the TenantResolver trait (ADR 0029).
+http        = { workspace = true }
+
 [dev-dependencies]
 proptest = { workspace = true }
 criterion = { workspace = true }

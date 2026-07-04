@@ -123,7 +123,10 @@ mod tests {
         let body = br#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search-web","arguments":{"query":"rust"}}}"#;
         let req = parse(body).unwrap();
         match req {
-            McpRequest::ToolCall { tool, argument_hash } => {
+            McpRequest::ToolCall {
+                tool,
+                argument_hash,
+            } => {
                 assert_eq!(tool.as_str(), "search-web");
                 assert_ne!(argument_hash, [0u8; 32]);
             }
@@ -149,7 +152,9 @@ mod tests {
         let req = parse(body).unwrap();
         assert!(matches!(
             req,
-            McpRequest::Lifecycle { method: LifecycleMethod::Initialize }
+            McpRequest::Lifecycle {
+                method: LifecycleMethod::Initialize
+            }
         ));
     }
 

@@ -47,6 +47,7 @@ use pin_project::{pin_project, pinned_drop};
 use riftgate_config::Config;
 use riftgate_core::capability::CapabilityBroker;
 use riftgate_core::router::{BackendPool, BackendSignals, Outcome, Router, RoutingDecision};
+use riftgate_core::tenant::TenantResolver;
 use riftgate_core::types::RequestId;
 use riftgate_obs::Publisher;
 use riftgate_obs::spans;
@@ -83,6 +84,8 @@ pub struct HandlerState {
     /// configured. `Some` when at least one tenant is enrolled under
     /// `[mcp.tenants]` in the gateway config.
     pub mcp_broker: Option<Arc<dyn CapabilityBroker>>,
+    /// Tenant identity resolver (v1.0, ADR 0029).
+    pub tenant_resolver: Arc<dyn TenantResolver>,
 }
 
 /// Body type returned by [`handle`]. Boxed so streaming and
@@ -160,28 +163,20 @@ pub async fn handle(
         if let Some(broker) = &state.mcp_broker {
             match riftgate_mcp::parse(&body_bytes) {
                 Ok(mcp_req) => {
-                    // v0.5: resolve tenant from the x-riftgate-tenant header;
-                    // fall back to TenantId(0) when absent. Full multitenancy
-                    // config (name -> TenantId mapping) is a v0.5 follow-on.
-                    let tenant_id = parts
-                        .headers
-                        .get("x-riftgate-tenant")
-                        .and_then(|v| v.to_str().ok())
-                        .and_then(|s| s.parse::<u32>().ok())
-                        .unwrap_or(0);
-                    let identity = riftgate_core::capability::TenantIdentity {
-                        tenant: riftgate_core::types::TenantId(tenant_id),
-                        principal: parts
-                            .headers
-                            .get("x-riftgate-principal")
-                            .and_then(|v| v.to_str().ok())
-                            .unwrap_or("default")
-                            .to_owned(),
-                    };
+                    // Resolve tenant via the configured TenantResolver (ADR 0029).
+                    // Falls back to TenantId(0) / "default" when the resolver
+                    // returns None (e.g. missing or invalid API key).
+                    let identity = state
+                        .tenant_resolver
+                        .resolve(&parts.headers)
+                        .unwrap_or_else(|| riftgate_core::capability::TenantIdentity {
+                            tenant: riftgate_core::types::TenantId(0),
+                            principal: "default".to_owned(),
+                        });
                     match broker.authorize(&mcp_req, &identity) {
-                        riftgate_core::capability::CapabilityDecision::Allow {
-                            attestation,
-                        } => Some(attestation),
+                        riftgate_core::capability::CapabilityDecision::Allow { attestation } => {
+                            Some(attestation)
+                        }
                         riftgate_core::capability::CapabilityDecision::Deny { reason } => {
                             return Ok(error_response(
                                 StatusCode::FORBIDDEN,
@@ -282,15 +277,11 @@ pub async fn handle(
 
     // Inject MCP attestation headers on authorized MCP requests.
     if let Some(ref attest) = mcp_attestation {
-        let sig_hex: String = attest
-            .signature
-            .0
-            .iter()
-            .fold(String::new(), |mut s, b| {
-                use std::fmt::Write;
-                let _ = write!(s, "{b:02x}");
-                s
-            });
+        let sig_hex: String = attest.signature.0.iter().fold(String::new(), |mut s, b| {
+            use std::fmt::Write;
+            let _ = write!(s, "{b:02x}");
+            s
+        });
         if let (Ok(caller_v), Ok(tool_v), Ok(sig_v)) = (
             HeaderValue::from_str(&attest.caller.0.to_string()),
             HeaderValue::from_str(&attest.subject),
@@ -299,7 +290,10 @@ pub async fn handle(
             upstream_req = upstream_req
                 .header(HeaderName::from_static("riftgate-mcp-caller"), caller_v)
                 .header(HeaderName::from_static("riftgate-mcp-tool"), tool_v)
-                .header(HeaderName::from_static("riftgate-mcp-decision"), attest.decision)
+                .header(
+                    HeaderName::from_static("riftgate-mcp-decision"),
+                    attest.decision,
+                )
                 .header(HeaderName::from_static("riftgate-mcp-signature"), sig_v);
         }
     }
