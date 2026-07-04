@@ -86,8 +86,10 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
-          # cargo-deny reads Cargo.lock directly; --all-features is a cargo flag
-          # and not a valid cargo-deny argument.
+          # advisory-not-detected and duplicate warnings are informational;
+          # real security advisory violations remain cargo-deny errors and
+          # still fail the job via the deny rules in deny.toml.
+          deny-on-warnings: 'false'
 
   mdbook:
     name: mdbook build

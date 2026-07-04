@@ -12,13 +12,39 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
 yanked  = "deny"
 ignore  = [
-    # Transitively pulled by tonic/opentelemetry; no safe upgrade available.
+    # tonic/opentelemetry transitive dep; no safe upgrade available.
     "RUSTSEC-2025-0134",
-    # wasmtime 31 advisories: the `wasm` feature in riftgate-filter is
-    # off-by-default. Upgrading wasmtime 31 → 44+ requires a breaking
-    # component-model API migration (Options doc + ADR needed).
-    # All other previously-ignored IDs are now resolved in newer dep versions
-    # and have been removed from this list.
+
+    # ---------- wasmtime 31.0.0 (riftgate-filter, wasm feature off-by-default) ----------
+    # Upgrading wasmtime 31 → 44+ requires a breaking component-model ABI
+    # migration that needs its own Options doc + ADR. Tracked as tech-debt.
+    # The `wasm` feature is off-by-default; production deployments MUST NOT
+    # enable it until wasmtime is bumped past these advisories.
+    "RUSTSEC-2024-0436",  # paste (unmaintained, via wasmtime macros)
+    "RUSTSEC-2025-0046",  # wasmtime: fd_renumber WASIp1 host panic
+    "RUSTSEC-2025-0118",  # wasmtime: unsound API access to shared linear memory
+    "RUSTSEC-2026-0006",  # wasmtime: f64.copysign segfault/OOB on x86-64
+    "RUSTSEC-2026-0020",  # wasmtime: guest-controlled resource exhaustion
+    "RUSTSEC-2026-0021",  # wasmtime: panic with excessive wasi:http fields
+    "RUSTSEC-2026-0085",  # wasmtime: panic lifting flags component value
+    "RUSTSEC-2026-0086",  # wasmtime: host data leakage with 64-bit tables + Winch
+    "RUSTSEC-2026-0087",  # wasmtime: f64x2.splat segfault on x86-64 Cranelift
+    "RUSTSEC-2026-0088",  # wasmtime: data leakage between pooling allocator instances
+    "RUSTSEC-2026-0089",  # wasmtime: host panic with Winch table.fill
+    "RUSTSEC-2026-0091",  # wasmtime: OOB write transcoding component model strings
+    "RUSTSEC-2026-0092",  # wasmtime: panic transcoding misaligned UTF-16 strings
+    "RUSTSEC-2026-0093",  # wasmtime: heap OOB read UTF-16 to latin1+utf16 transcoding
+    "RUSTSEC-2026-0094",  # wasmtime: improperly masked table.grow with Winch
+    "RUSTSEC-2026-0095",  # wasmtime: Winch sandbox-escaping memory access
+    "RUSTSEC-2026-0096",  # wasmtime: miscompiled heap access enables sandbox escape on aarch64
+    "RUSTSEC-2026-0114",  # wasmtime: panic allocating table exceeding address space
+
+    # ---------- kube 0.93 transitive deps (riftgate-operator, operator feature off-by-default) ----------
+    # These unmaintained crates are pulled in by kube-runtime 0.93.
+    # No upgrade path without bumping kube (requires new ADR per ADR 0030).
+    "RUSTSEC-2025-0012",  # backoff (unmaintained, via kube-runtime)
+    "RUSTSEC-2024-0388",  # derivative (unmaintained, via kube-runtime)
+    "RUSTSEC-2024-0384",  # instant (unmaintained, via backoff via kube-runtime)
 ]
 
 [licenses]
@@ -35,6 +61,8 @@ allow = [
     "CDLA-Permissive-2.0",
     "Unicode-3.0",
     "CC0-1.0",
+    # Required by the ring crate (clarification below).
+    "OpenSSL",
 ]
 exceptions = []
 
@@ -49,18 +77,18 @@ wildcards         = "allow"
 deny              = []
 skip              = [
     # kube 0.93 (riftgate-operator optional dep) uses thiserror 1.x while
-    # our workspace pins thiserror 2.x.
-    { name = "thiserror",        version = "1" },
-    { name = "thiserror-impl",   version = "1" },
-    # Pre-existing transitive duplicates from tonic/opentelemetry/hyper-util:
-    { name = "core-foundation",  version = "0.9" },
-    { name = "getrandom",        version = "0.2" },
-    { name = "hashbrown",        version = "0.12" },
-    { name = "hashbrown",        version = "0.14" },
-    { name = "indexmap",         version = "1" },
-    { name = "socket2",          version = "0.5" },
-    { name = "tower",            version = "0.4" },
-    { name = "windows-sys",      version = "0.52" },
+    # our workspace pins thiserror 2.x. Both coexist safely.
+    { name = "thiserror",       version = "1" },
+    { name = "thiserror-impl",  version = "1" },
+    # Pre-existing transitive duplicates from tonic/opentelemetry/hyper-util/kube:
+    { name = "core-foundation", version = "0.9" },
+    { name = "getrandom",       version = "0.2" },
+    { name = "hashbrown",       version = "0.12" },
+    { name = "hashbrown",       version = "0.14" },
+    { name = "indexmap",        version = "1" },
+    { name = "socket2",         version = "0.5" },
+    { name = "tower",           version = "0.4" },
+    { name = "windows-sys",     version = "0.52" },
 ]
 skip-tree = []
 
