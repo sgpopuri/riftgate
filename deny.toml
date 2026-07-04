@@ -63,6 +63,8 @@ allow = [
     "CC0-1.0",
     # Required by the ring crate (clarification below).
     "OpenSSL",
+    # foldhash (transitive via hashbrown/dashmap) uses Zlib.
+    "Zlib",
 ]
 exceptions = []
 
