@@ -48,7 +48,7 @@ fn main() -> ExitCode {
              This stub binary is present so `cargo check --workspace` succeeds\n\
              without Kubernetes headers installed."
         );
-        return ExitCode::from(2);
+        ExitCode::from(2)
     }
 
     #[cfg(feature = "operator")]
@@ -77,12 +77,18 @@ fn run_operator(cli: Cli) -> ExitCode {
             "riftgate-operator starting"
         );
 
-        // TODO(v1.0): wire kube::Client + kube_runtime::Controller for
-        // Riftgate, RiftgateBackend, RiftgateRoute. See ADR 0030.
-        tracing::warn!(
-            "controller loop not yet implemented; \
-             operator will exit after logging this message"
-        );
+        let client = match kube::Client::try_default().await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("riftgate-operator: cannot connect to Kubernetes API: {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+        tracing::info!("Kubernetes client initialized");
+
+        riftgate_operator::reconciler::live::run_controllers(client, cli.namespace.as_deref())
+            .await;
+
         ExitCode::SUCCESS
     })
 }

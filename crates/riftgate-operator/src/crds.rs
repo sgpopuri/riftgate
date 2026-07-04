@@ -80,7 +80,8 @@ fn default_probe_interval_ms() -> u32 {
         kind = "Riftgate",
         namespaced,
         status = "RiftgateStatus",
-        shortname = "rg"
+        shortname = "rg",
+        schema = "disabled"
     )
 )]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -162,7 +163,8 @@ pub struct RiftgateStatus {
         version = "v1alpha1",
         kind = "RiftgateBackend",
         namespaced,
-        shortname = "rgb"
+        shortname = "rgb",
+        schema = "disabled"
     )
 )]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -256,7 +258,8 @@ pub struct MultitenancyRouteConfig {
         version = "v1alpha1",
         kind = "RiftgateRoute",
         namespaced,
-        shortname = "rgr"
+        shortname = "rgr",
+        schema = "disabled"
     )
 )]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
