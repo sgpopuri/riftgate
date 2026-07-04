@@ -74,7 +74,12 @@ license-files = [
 multiple-versions = "warn"
 wildcards         = "allow"
 deny              = []
-skip              = []
+skip              = [
+    # kube 0.93 (riftgate-operator optional dep) uses thiserror 1.x while
+    # our workspace uses thiserror 2.x. Both versions coexist safely.
+    { name = "thiserror",      version = "1" },
+    { name = "thiserror-impl", version = "1" },
+]
 skip-tree         = []
 
 [sources]

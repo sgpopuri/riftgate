@@ -86,7 +86,8 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
-          arguments: --all-features
+          # cargo-deny reads Cargo.lock directly; --all-features is a cargo flag
+          # and not a valid cargo-deny argument.
 
   mdbook:
     name: mdbook build
