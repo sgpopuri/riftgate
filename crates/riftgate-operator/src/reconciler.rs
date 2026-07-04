@@ -93,6 +93,69 @@ pub mod live {
     };
     use crate::render;
 
+    /// Read API keys from Kubernetes Secrets for routes that declare
+    /// `multitenancy.apiKeySecretRef`.
+    ///
+    /// Secret format (one entry per line in the referenced Secret key):
+    /// - Pre-hashed: `sha256:<64-hex>=<tenant>` — used as-is.
+    /// - Raw: `<raw-key>=<tenant>` — SHA-256 hashed by the operator.
+    async fn collect_api_keys(
+        routes: &[RiftgateRoute],
+        ns: &str,
+        client: &Client,
+    ) -> std::collections::HashMap<String, String> {
+        use sha2::{Digest, Sha256};
+        let secrets_api: Api<k8s_openapi::api::core::v1::Secret> =
+            Api::namespaced(client.clone(), ns);
+        let mut keys = std::collections::HashMap::new();
+        for route in routes {
+            let Some(mt) = &route.spec.multitenancy else {
+                continue;
+            };
+            let Some(secret_ref) = &mt.api_key_secret_ref else {
+                continue;
+            };
+            let Ok(secret) = secrets_api.get(&secret_ref.name).await else {
+                tracing::warn!(secret = %secret_ref.name, "API key Secret not found");
+                continue;
+            };
+            let Some(data) = &secret.data else { continue };
+            let Some(raw_bytes) = data.get(&secret_ref.key) else {
+                tracing::warn!(secret = %secret_ref.name, key = %secret_ref.key, "key missing in Secret");
+                continue;
+            };
+            let Ok(content) = std::str::from_utf8(&raw_bytes.0) else {
+                tracing::warn!(secret = %secret_ref.name, "Secret value not UTF-8");
+                continue;
+            };
+            for line in content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                let Some((k, tenant)) = line.split_once('=') else {
+                    tracing::warn!(line, "invalid API key line; expected <key>=<tenant>");
+                    continue;
+                };
+                let hashed = if k.starts_with("sha256:") {
+                    k.to_owned()
+                } else {
+                    let hex =
+                        Sha256::digest(k.as_bytes())
+                            .iter()
+                            .fold(String::new(), |mut s, b| {
+                                use std::fmt::Write;
+                                let _ = write!(s, "{b:02x}");
+                                s
+                            });
+                    format!("sha256:{hex}")
+                };
+                keys.insert(hashed, tenant.to_owned());
+            }
+        }
+        keys
+    }
+
     /// Shared context injected into every reconcile call.
     pub struct Ctx {
         /// Live Kubernetes API client.
@@ -142,7 +205,10 @@ pub mod live {
         let route_refs: Vec<(&str, &RiftgateRouteSpec)> =
             routes.iter().map(|(n, s)| (n.as_str(), *s)).collect();
 
-        let toml_config = render::render_config(&obj.spec, &backend_refs, &route_refs);
+        // 4. Read API keys from Secrets for routes that declare apiKeySecretRef.
+        let api_keys = collect_api_keys(&route_list.items, &ns, &ctx.client).await;
+
+        let toml_config = render::render_config(&obj.spec, &backend_refs, &route_refs, &api_keys);
         tracing::debug!(gateway = %name, bytes = toml_config.len(), "rendered config");
 
         // 4. Patch the ConfigMap via server-side apply.

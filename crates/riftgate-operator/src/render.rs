@@ -4,17 +4,20 @@
 //! objects and renders a TOML string that is stored in a `ConfigMap` and
 //! mounted into the gateway container as `--config`.
 
+use std::collections::HashMap;
+
 use crate::crds::{RiftgateBackendSpec, RiftgateRouteSpec, RiftgateSpec};
 
 /// Render a complete `riftgate.toml` from the CRD objects.
 ///
-/// `routes` is a slice of `(name, spec)` pairs; each route contributes one
-/// tenant entry to `[mcp.tenants]` and one API key entry to
-/// `[multitenancy.api_keys]`.
+/// `api_keys` is a map of `"sha256:<64-hex-chars>"` to tenant name, populated
+/// by reading `RiftgateRoute.spec.multitenancy.apiKeySecretRef` Secrets. Pass
+/// an empty map when multitenancy is not configured.
 pub fn render_config(
     gateway: &RiftgateSpec,
     backends: &[(&str, &RiftgateBackendSpec)],
     routes: &[(&str, &RiftgateRouteSpec)],
+    api_keys: &HashMap<String, String>,
 ) -> String {
     let mut out = String::new();
 
@@ -63,6 +66,20 @@ pub fn render_config(
         }
     }
 
+    // [multitenancy] — API key registry from CRD-referenced Secrets.
+    if !api_keys.is_empty() {
+        out.push_str("[multitenancy]\n");
+        out.push_str("mode = \"api-key\"\n\n");
+        out.push_str("[multitenancy.api_keys]\n");
+        // Sort for deterministic output (important for ConfigMap diffs).
+        let mut sorted: Vec<_> = api_keys.iter().collect();
+        sorted.sort_by_key(|(k, _)| k.as_str());
+        for (hash_key, tenant) in sorted {
+            out.push_str(&format!("{:?} = {:?}\n", hash_key, tenant));
+        }
+        out.push('\n');
+    }
+
     out
 }
 
@@ -92,11 +109,27 @@ mod tests {
             url: Some("http://vllm:8000".to_owned()),
             ..Default::default()
         };
-        let toml = render_config(&gw, &[("llm-prod", &backend)], &[]);
+        let toml = render_config(&gw, &[("llm-prod", &backend)], &[], &HashMap::new());
         assert!(toml.contains("[server]"));
         assert!(toml.contains("[backend]"));
         assert!(toml.contains("url = \"http://vllm:8000\""));
         assert!(toml.contains("[obs]"));
+    }
+
+    #[test]
+    fn render_with_api_keys() {
+        let gw = RiftgateSpec {
+            image: "riftgate:v1".to_owned(),
+            ..Default::default()
+        };
+        let mut keys = HashMap::new();
+        keys.insert("sha256:abc".to_owned(), "acme".to_owned());
+        keys.insert("sha256:def".to_owned(), "bigcorp".to_owned());
+        let toml = render_config(&gw, &[], &[], &keys);
+        assert!(toml.contains("[multitenancy]"));
+        assert!(toml.contains("mode = \"api-key\""));
+        assert!(toml.contains("[multitenancy.api_keys]"));
+        assert!(toml.contains("\"sha256:abc\" = \"acme\""));
     }
 
     #[test]
@@ -115,7 +148,12 @@ mod tests {
             }),
             ..Default::default()
         };
-        let toml = render_config(&gw, &[("llm-prod", &backend)], &[("acme", &route)]);
+        let toml = render_config(
+            &gw,
+            &[("llm-prod", &backend)],
+            &[("acme", &route)],
+            &HashMap::new(),
+        );
         assert!(toml.contains("[mcp.tenants.acme]"));
         assert!(toml.contains("allowed_tools = [\"search-web\"]"));
     }
