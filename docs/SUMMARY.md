@@ -18,6 +18,7 @@
 - [v0.2 retrospective](02c-v0.2-retrospective.md)
 - [v0.3 retrospective](02d-v0.3-retrospective.md)
 - [v0.4 retrospective](02e-v0.4-retrospective.md)
+- [v0.5 retrospective](02f-v0.5-retrospective.md)
 
 # Architecture
 
@@ -39,6 +40,7 @@
   - [Routing](04-design/lld-routing.md)
   - [Observability](04-design/lld-observability.md)
   - [Rate limiter](04-design/lld-rate-limiter.md)
+  - [Filter chain](04-design/lld-filter-chain.md)
   - [MCP capability](04-design/lld-mcp-capability.md)
 
 # Options docs
@@ -68,6 +70,8 @@
   - [026 — MCP orchestration](05-options/026-mcp-orchestration.md)
   - [027 — Token-level metrics](05-options/027-token-level-metrics.md)
   - [028 — GPU-pressure correlation](05-options/028-gpu-pressure-correlation.md)
+  - [017 — Multitenancy](05-options/017-multitenancy.md)
+  - [018 — Deployment model](05-options/018-deployment.md)
 
 # Architecture decisions
 
@@ -100,7 +104,15 @@
   - [0026 — GPU pressure via DCGM exporter](06-adrs/0026-gpu-pressure-via-dcgm-exporter.md)
   - [0027 — Per-shard bump-arena pool](06-adrs/0027-per-shard-bump-arena-pool.md)
   - [0028 — Timer cutover benchmark-gated](06-adrs/0028-timer-cutover-benchmark-gated.md)
+  - [0029 — API-key tenant resolver](06-adrs/0029-api-key-tenant-resolver.md)
+  - [0030 — Kubernetes operator with CRDs](06-adrs/0030-k8s-operator-crds.md)
 
 # Reference
 
 - [Glossary](08-glossary.md)
+
+# Operations
+
+- [Operator handbook](07-operator-handbook.md)
+- [Troubleshooting](09-troubleshooting.md)
+- [Upgrading](../UPGRADING.md)

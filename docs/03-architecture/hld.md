@@ -53,7 +53,7 @@ The four planes communicate through narrow, typed interfaces. Failures in one pl
 - **[Data plane](data-plane.md)** — the per-request hot path. Receives bytes, parses, schedules, dispatches, frames responses, persists to the request log.
 - **[Extension plane](extension-plane.md)** — pluggable behavior: filters (request/response transforms), routing strategies, anything a user wants to inject without forking.
 - **[Observability plane](observability-plane.md)** — OTel traces, Prom metrics, eBPF profiles, token-level SLOs.
-- **[Control plane](control-plane.md)** — config, CRDs, backend health, hot reloads. Lightest of the four planes by design; production maturity lands in `v1.0`.
+- **[Control plane](control-plane.md)** — config, CRDs, backend health, hot reloads. In v1.0 the `riftgate-operator` Kubernetes operator reconciles `Riftgate`, `RiftgateBackend`, and `RiftgateRoute` CRDs into running Deployments; the standalone binary continues to work with a TOML config file.
 
 ## 2. The trait surface
 
@@ -72,6 +72,7 @@ pub trait WAL { /* append-only, fsync semantics, ARIES-style recovery */ }
 pub trait Filter { /* request/response transform */ }
 pub trait Router { /* select backend(s) for a request */ }
 pub trait CapabilityBroker { /* MCP tool/resource authorization; v0.5+ */ }
+pub trait TenantResolver { /* API-key registry or trusted-header resolver; v1.0+ */ }
 pub trait ObservabilitySink { /* emit traces, metrics, profiles */ }
 ```
 
