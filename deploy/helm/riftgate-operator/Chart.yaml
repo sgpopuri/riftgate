@@ -1,0 +1,16 @@
+apiVersion: v2
+name: riftgate-operator
+description: Kubernetes operator for the Riftgate gateway (riftgate.io/v1alpha1 CRDs)
+type: application
+version: 0.1.0
+appVersion: "v1.0.0-dev"
+keywords:
+  - riftgate
+  - gateway
+  - llm
+  - operator
+home: https://github.com/sgpopuri/riftgate
+sources:
+  - https://github.com/sgpopuri/riftgate
+maintainers:
+  - name: Sriram Popuri

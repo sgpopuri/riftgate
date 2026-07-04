@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "riftgate-operator.fullname" . }}
+  labels:
+    {{- include "riftgate-operator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "riftgate-operator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "riftgate-operator.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "riftgate-operator.serviceAccountName" . }}
+      containers:
+        - name: operator
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- if .Values.watchNamespace }}
+            - "--namespace={{ .Values.watchNamespace }}"
+            {{- end }}
+            - "--leader-lock={{ .Values.leaderLock }}"
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.logLevel | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

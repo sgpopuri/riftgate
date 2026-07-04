@@ -333,7 +333,7 @@ impl WasmFilter {
         #[cfg(not(feature = "wasm"))]
         {
             let _ = cfg;
-            return Err(WasmFilterError::FeatureDisabled);
+            Err(WasmFilterError::FeatureDisabled)
         }
 
         #[cfg(feature = "wasm")]

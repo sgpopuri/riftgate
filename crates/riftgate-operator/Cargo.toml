@@ -1,0 +1,45 @@
+[package]
+name         = "riftgate-operator"
+description  = "Kubernetes operator for Riftgate: reconciles Riftgate, RiftgateBackend, and RiftgateRoute CRDs into running gateway Deployments."
+version      = { workspace = true }
+edition      = { workspace = true }
+rust-version = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+homepage     = { workspace = true }
+authors      = { workspace = true }
+readme       = "README.md"
+publish      = false   # not published to crates.io; distributed via Helm chart
+
+[features]
+default = []
+# Enable the live Kubernetes controller runtime. Requires kube, kube-runtime, and
+# k8s-openapi. Without this feature the crate compiles to a stub binary that
+# prints a usage hint, allowing `cargo check --workspace` to succeed without
+# Kubernetes headers installed.
+operator = ["dep:kube", "dep:kube-runtime", "dep:k8s-openapi"]
+
+[dependencies]
+riftgate-config = { path = "../riftgate-config" }
+riftgate-core   = { path = "../riftgate-core" }
+
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio       = { workspace = true }
+clap        = { workspace = true }
+
+# Kubernetes controller runtime — optional; only compiled when the `operator`
+# feature is enabled. kube 0.93 pairs with k8s-openapi 0.21.
+# ADR 0030 targets kube 0.98; update these versions when bumping at v1.0 ship.
+kube         = { version = "0.93", features = ["runtime", "derive"], optional = true }
+kube-runtime = { version = "0.93", optional = true }
+k8s-openapi  = { version = "0.21", features = ["v1_29"], optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -28,6 +28,7 @@ members = [
     "crates/riftgate-obs-bpf",
     "crates/riftgate-obs-bpf/programs",
     "crates/riftgate-mcp",
+    "crates/riftgate-operator",
 ]
 exclude = [
     # cargo-fuzz sub-packages are opt-in; cargo-fuzz invokes them

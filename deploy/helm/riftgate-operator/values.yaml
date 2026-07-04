@@ -1,0 +1,40 @@
+# riftgate-operator Helm chart default values.
+# Override with --set or a values file.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/sgpopuri/riftgate-operator
+  pullPolicy: IfNotPresent
+  # Overrides the appVersion when set.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Namespace the operator watches. Empty string = all namespaces.
+watchNamespace: ""
+
+# Leader-election lock name (required for multi-replica operator deployments).
+leaderLock: "riftgate-operator-leader"
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "256Mi"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Log level for the operator binary.
+logLevel: "info"

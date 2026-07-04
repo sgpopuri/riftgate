@@ -217,16 +217,22 @@ The full pre-commit verification, in the order CI runs:
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features --exclude riftgate-obs-bpf-programs -- --deny warnings
-cargo test --workspace --all-features --exclude riftgate-obs-bpf-programs
+cargo clippy --workspace --all-targets --exclude riftgate-obs-bpf-programs --exclude riftgate-operator -- --deny warnings
+cargo clippy -p riftgate-operator -- --deny warnings
+cargo test --workspace --exclude riftgate-obs-bpf-programs --exclude riftgate-operator
+cargo test -p riftgate-operator
 RUSTDOCFLAGS='--deny warnings' cargo doc --workspace --no-deps --document-private-items
 ```
 
-`riftgate-obs-bpf-programs` is excluded from clippy and test because it targets `bpfel-unknown-none`
-(a no-std BPF target) which cannot be linted or tested on the host toolchain. This is a pre-existing
-v0.4 constraint. The BPF program crate is still checked via `scripts/build-bpf-objects`.
+`riftgate-obs-bpf-programs` is excluded because it targets `bpfel-unknown-none` (no-std BPF target,
+cannot lint/test on the host toolchain). The BPF program crate is still checked via `scripts/build-bpf-objects`.
 
-Primary CI parity checks all pass locally if the four commands above pass.
+`riftgate-operator` is excluded from the all-features runs because its `operator` feature pulls in
+`kube`, `kube-runtime`, and `k8s-openapi` which require Kubernetes headers. Run
+`cargo clippy -p riftgate-operator -- -D warnings` (default features) separately.
+To build the live controller: `cargo build -p riftgate-operator --features operator`.
+
+Primary CI parity checks all pass locally if the commands above pass.
 
 Additional CI jobs:
 
