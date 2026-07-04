@@ -1,0 +1,20 @@
+[package]
+name    = "riftgate-replay-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+riftgate-replay = { path = ".." }
+
+# cargo-fuzz always compiles with nightly; the fuzz target itself does not
+# need any other nightly-only features.
+[[bin]]
+name = "fuzz_wal_frame"
+path = "fuzz_targets/fuzz_wal_frame.rs"
+test = false
+doc  = false

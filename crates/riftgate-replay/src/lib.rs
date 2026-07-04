@@ -28,5 +28,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod file_wal;
+mod frame;
 
 pub use file_wal::{ENTRY_HEADER_BYTES, FileWal, FileWalConfig};
+pub use frame::{ParseFrameError, ParsedFrame, try_parse_frames};

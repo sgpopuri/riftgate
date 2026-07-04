@@ -88,7 +88,9 @@ pub mod live {
     use kube::{Api, Client, ResourceExt};
 
     use super::ReconcileError;
-    use crate::crds::{Riftgate, RiftgateBackend, RiftgateRoute};
+    use crate::crds::{
+        Riftgate, RiftgateBackend, RiftgateBackendSpec, RiftgateRoute, RiftgateRouteSpec,
+    };
     use crate::render;
 
     /// Shared context injected into every reconcile call.
@@ -109,14 +111,118 @@ pub mod live {
         let ns = obj.namespace().unwrap_or_else(|| "default".to_owned());
         tracing::info!(gateway = %name, namespace = %ns, "reconciling Riftgate");
 
-        // Render TOML config from spec.
-        let toml = render::render_config(&obj.spec, &[], &[]);
-        tracing::debug!(gateway = %name, bytes = toml.len(), "rendered gateway config");
+        // 1. List all RiftgateBackend objects in the namespace.
+        let backends_api: Api<RiftgateBackend> = Api::namespaced(ctx.client.clone(), &ns);
+        let backend_list = backends_api
+            .list(&kube::api::ListParams::default())
+            .await
+            .map_err(|e| ReconcileError::ApiError(format!("list backends: {e}")))?;
 
-        // TODO(v1.0 Phase B): patch ConfigMap + Deployment in the namespace.
-        // The ConfigMap name convention: "<gateway-name>-config".
-        // The Deployment name convention: "<gateway-name>".
-        let _ = ctx.client.clone(); // keep reference live until Phase B
+        // 2. List all RiftgateRoute objects in the namespace.
+        let routes_api: Api<RiftgateRoute> = Api::namespaced(ctx.client.clone(), &ns);
+        let route_list = routes_api
+            .list(&kube::api::ListParams::default())
+            .await
+            .map_err(|e| ReconcileError::ApiError(format!("list routes: {e}")))?;
+
+        // 3. Render the TOML config from all three CRD objects.
+        let backends: Vec<(String, &RiftgateBackendSpec)> = backend_list
+            .items
+            .iter()
+            .map(|b| (b.name_any(), &b.spec))
+            .collect();
+        let routes: Vec<(String, &RiftgateRouteSpec)> = route_list
+            .items
+            .iter()
+            .map(|r| (r.name_any(), &r.spec))
+            .collect();
+
+        let backend_refs: Vec<(&str, &RiftgateBackendSpec)> =
+            backends.iter().map(|(n, s)| (n.as_str(), *s)).collect();
+        let route_refs: Vec<(&str, &RiftgateRouteSpec)> =
+            routes.iter().map(|(n, s)| (n.as_str(), *s)).collect();
+
+        let toml_config = render::render_config(&obj.spec, &backend_refs, &route_refs);
+        tracing::debug!(gateway = %name, bytes = toml_config.len(), "rendered config");
+
+        // 4. Patch the ConfigMap via server-side apply.
+        let cm_name = format!("{name}-config");
+        let cm_api: Api<k8s_openapi::api::core::v1::ConfigMap> =
+            Api::namespaced(ctx.client.clone(), &ns);
+        let cm_patch = serde_json::json!({
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": { "name": cm_name, "namespace": ns },
+            "data": { "riftgate.toml": toml_config }
+        });
+        cm_api
+            .patch(
+                &cm_name,
+                &kube::api::PatchParams::apply("riftgate-operator"),
+                &kube::api::Patch::Apply(&cm_patch),
+            )
+            .await
+            .map_err(|e| ReconcileError::ApiError(format!("patch ConfigMap: {e}")))?;
+        tracing::info!(gateway = %name, configmap = %cm_name, "ConfigMap patched");
+
+        // 5. Patch the Deployment via server-side apply.
+        let deploy_api: Api<k8s_openapi::api::apps::v1::Deployment> =
+            Api::namespaced(ctx.client.clone(), &ns);
+        let deploy_patch = serde_json::json!({
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+                "name": name,
+                "namespace": ns,
+                "labels": { "app.kubernetes.io/managed-by": "riftgate-operator" }
+            },
+            "spec": {
+                "replicas": obj.spec.replicas,
+                "selector": { "matchLabels": { "app": name } },
+                "template": {
+                    "metadata": { "labels": { "app": name } },
+                    "spec": {
+                        "containers": [{
+                            "name": "riftgate",
+                            "image": obj.spec.image,
+                            "args": ["--config", "/etc/riftgate/riftgate.toml"],
+                            "ports": [{ "containerPort": 8080, "name": "http" }],
+                            "volumeMounts": [{
+                                "name": "config",
+                                "mountPath": "/etc/riftgate",
+                                "readOnly": true
+                            }]
+                        }],
+                        "volumes": [{
+                            "name": "config",
+                            "configMap": { "name": cm_name }
+                        }]
+                    }
+                }
+            }
+        });
+        deploy_api
+            .patch(
+                &name,
+                &kube::api::PatchParams::apply("riftgate-operator"),
+                &kube::api::Patch::Apply(&deploy_patch),
+            )
+            .await
+            .map_err(|e| ReconcileError::ApiError(format!("patch Deployment: {e}")))?;
+        tracing::info!(gateway = %name, deployment = %name, "Deployment patched");
+
+        // 6. Update the Riftgate status subresource.
+        let status_patch = serde_json::json!({
+            "status": { "message": "reconciled" }
+        });
+        cm_api
+            .patch_status(
+                &cm_name,
+                &kube::api::PatchParams::apply("riftgate-operator"),
+                &kube::api::Patch::Merge(&status_patch),
+            )
+            .await
+            .ok(); // best-effort; ignore errors
 
         Ok(Action::requeue(Duration::from_secs(300)))
     }
